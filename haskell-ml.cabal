@@ -1,0 +1,58 @@
+name:                haskell-ml
+version:             0.1.0.0
+synopsis:            Machine learning in Haskell
+description:         Machine learning in Haskell
+license:             BSD3
+license-file:        LICENSE
+author:              David Banas
+maintainer:          capn.freako@gmail.com
+copyright:           2018 David Banas
+category:            Machine Learning
+build-type:          Simple
+extra-source-files:  README.md
+                     stack.yaml
+                     .gitignore
+cabal-version:       >=1.10
+
+source-repository head
+  type:     git
+  location: https://github.com/capn-freako/Haskell_ML.git
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     Haskell_ML.FCN
+  build-depends:       base >= 4.7 && < 5
+                     , binary
+                     , hmatrix
+                     , MonadRandom
+                     , singletons
+  default-language:    Haskell2010
+  ghc-options:         -O2
+                       -fexcess-precision
+                       -optc-ffast-math
+                       -optc-O3
+
+-- executable fcnTest
+--   hs-source-dirs:      examples/fcnTest
+--   main-is:             fcnTest.hs
+--   build-depends:       base >= 4.7 && < 5
+--   default-language:    Haskell2010
+--   ghc-options:         -O2
+--                        -fexcess-precision
+--                        -optc-ffast-math
+--                        -optc-O3
+--                        -rtsopts
+
+-- test-suite fcnTest
+--   type:                exitcode-stdio-1.0
+--   hs-source-dirs:      test
+--   main-is:             fcnTest.hs
+--   build-depends:       base >= 4.7 && < 5
+--                      , singletons
+--   default-language:    Haskell2010
+--   ghc-options:         -O2
+--                        -fexcess-precision
+--                        -optc-ffast-math
+--                        -optc-O3
+--                        -rtsopts
+
