@@ -11,6 +11,7 @@
 -- #define USE_AD
 
 {-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BangPatterns #-}
@@ -44,7 +45,7 @@ e-mail to: conal@conal.net
 -}
 module Haskell_ML.FCN
   ( FCNet,
-    randNet, trainNet, runNet
+    randNet, trainNet, runNet, netTest
   ) where
 
 import Control.Monad.Random
@@ -53,10 +54,7 @@ import Data.List
 import Data.Singletons.Prelude
 import Data.Singletons.TypeLits
 import GHC.Generics (Generic)
--- import GHC.TypeLits
--- import Numeric.LinearAlgebra.HMatrix (sumElements, scalar, cmap, step)
 import Numeric.LinearAlgebra.Static
--- import qualified Numeric.LinearAlgebra.Static as LAS
 
 
 -- | A fully connected, multi-layer network with fixed input/output
@@ -87,7 +85,7 @@ randNet :: (KnownNat i, KnownNat o, MonadRandom m)
         => [Integer]
         -> m (FCNet i o)
 randNet hs = withSomeSing hs $ \ss ->
-  FCNet <$> randNetwork ss
+  FCNet <$> randNetwork' ss
 
 
 -- | Trains a value of type `FCNet i o`, using the supplied list of
@@ -117,6 +115,42 @@ runNet (FCNet n) in_prs = map (runNetwork n) in_prs
 instance (KnownNat i, KnownNat o) => Binary (FCNet i o) where
     put = putFCNet
     get = getFCNet
+
+
+netTest :: MonadRandom m => Double -> Int -> m String
+netTest rate n = do
+    inps <- replicateM n $ do
+      s <- getRandom
+      return $ randomVector s Uniform * 2 - 1
+    let outs = flip map inps $ \v ->
+                 if v `inCircle` (fromRational 0.33, 0.33)
+                      || v `inCircle` (fromRational (-0.33), 0.33)
+                   then fromRational 1
+                   else fromRational 0
+    net0 :: Network 2 '[16, 8] 1 <- randNetwork
+    -- let trained = foldl' trainEach net0 (zip inps outs)
+    --       where
+    --         trainEach :: (KnownNat i, SingI hs, KnownNat o)
+    --                   => Network i hs o
+    --                   -> (R i, R o)
+    --                   -> Network i hs o
+    --         trainEach nt (i, o) = trainNetwork rate i o nt
+    let trained = sgd rate (zip inps outs) net0
+
+        outMat = [ [ render (norm_2 (runNetwork trained (vector [x / 25 - 1,y / 10 - 1])))
+                   | x <- [0..50] ]
+                 | y <- [0..20] ]
+
+        render r | r <= 0.2  = ' '
+                 | r <= 0.4  = '.'
+                 | r <= 0.6  = '-'
+                 | r <= 0.8  = '='
+                 | otherwise = '#'
+
+    return $ unlines outMat
+  where
+    inCircle :: KnownNat n => R n -> (R n, Double) -> Bool
+    v `inCircle` (o, r) = norm_2 (v - o) <= r
 
 
 -----------------------------------------------------------------------
@@ -174,11 +208,15 @@ hiddenStruct = \case
 --
 -- Note: `hs` is determined explicitly, via the first argument, while
 --       `i` and `o` are determined implicitly, via type inference.
-randNetwork :: forall m i hs o. (MonadRandom m, KnownNat i, KnownNat o)
-            => Sing hs -> m (Network i hs o)
-randNetwork = \case
+randNetwork :: forall m i hs o. (MonadRandom m, KnownNat i, SingI hs, KnownNat o)
+            => m (Network i hs o)
+randNetwork = randNetwork' sing
+
+randNetwork' :: forall m i hs o. (MonadRandom m, KnownNat i, KnownNat o)
+             => Sing hs -> m (Network i hs o)
+randNetwork' = \case
   SNil            -> W    <$> randLayer
-  SNat `SCons` ss -> (:&~) <$> randLayer <*> randNetwork ss
+  SNat `SCons` ss -> (:&~) <$> randLayer <*> randNetwork' ss
 
 
 -- Binary instance definition for `Network i hs o`.
