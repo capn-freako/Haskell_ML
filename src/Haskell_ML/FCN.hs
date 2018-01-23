@@ -5,11 +5,6 @@
 --
 -- Copyright (c) 2018 David Banas; all rights reserved World wide.
 
-{-# LANGUAGE CPP #-}
-
--- Comment out, to use CCC for gradient solving.
--- #define USE_AD
-
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
@@ -33,19 +28,14 @@ Module      : Haskell_ML.FCN
 Description : Allows: creation, training, running, saving, and loading,
               of multi-layer, fully connected neural networks.
 Copyright   : (c) David Banas, 2018
-                  Conal Elliott, 2018
 License     : BSD-3
 Maintainer  : capn.freako@gmail.com
 Stability   : experimental
 Portability : ?
-
-This module is part of the @concat-learn@ package, which is maintained
-in a @private@ GitHub repository. To request access, please, send
-e-mail to: conal@conal.net
 -}
 module Haskell_ML.FCN
-  ( FCNet,
-    randNet, trainNet, runNet, netTest
+  ( FCNet(..), Network
+  , randNet, trainNet, runNet, netTest, hiddenStruct
   ) where
 
 import Control.Monad.Random
@@ -65,7 +55,6 @@ import Numeric.LinearAlgebra.Static
 -- via type inferencing, `hs` cannot, and you must be prepared to deal
 -- with it in a completely polymorphic fashion. You may assume nothing
 -- about `hs`, except that it is of kind `[Nat]`.
--- newtype (KnownNat i, KnownNat o) => FCNet i o = FCNet (Network i hs o)
 data FCNet :: Nat -> Nat -> * where
   FCNet :: (Network i hs o) -> FCNet i o
 
@@ -117,6 +106,9 @@ instance (KnownNat i, KnownNat o) => Binary (FCNet i o) where
     get = getFCNet
 
 
+-- | Basic sanity test of our code, taken from Justin's repository.
+--
+-- Printed output should contain two offset solid circles.
 netTest :: MonadRandom m => Double -> Int -> m String
 netTest rate n = do
     inps <- replicateM n $ do
@@ -128,13 +120,6 @@ netTest rate n = do
                    then fromRational 1
                    else fromRational 0
     net0 :: Network 2 '[16, 8] 1 <- randNetwork
-    -- let trained = foldl' trainEach net0 (zip inps outs)
-    --       where
-    --         trainEach :: (KnownNat i, SingI hs, KnownNat o)
-    --                   => Network i hs o
-    --                   -> (R i, R o)
-    --                   -> Network i hs o
-    --         trainEach nt (i, o) = trainNetwork rate i o nt
     let trained = sgd rate (zip inps outs) net0
 
         outMat = [ [ render (norm_2 (runNetwork trained (vector [x / 25 - 1,y / 10 - 1])))
@@ -151,6 +136,16 @@ netTest rate n = do
   where
     inCircle :: KnownNat n => R n -> (R n, Double) -> Bool
     v `inCircle` (o, r) = norm_2 (v - o) <= r
+
+
+-- | Returns a list of integers corresponding to the widths of the hidden
+-- layers of a `Network i hs o`.
+hiddenStruct :: Network i hs o -> [Integer]
+hiddenStruct = \case
+    W _    -> []
+    _ :&~ (n' :: Network h hs' o)
+           -> natVal (Proxy @h)
+            : hiddenStruct n'
 
 
 -----------------------------------------------------------------------
@@ -172,35 +167,27 @@ instance (KnownNat i, KnownNat o) => Binary (Layer i o)
 -- Generates a value of type `Layer i o`, filled with normally
 -- distributed random values, tucked inside the appropriate Monad, which
 -- must be an instance of `MonadRandom`.
+-- TODO: Change from uniform to normal.
 randLayer :: (MonadRandom m, KnownNat i, KnownNat o)
           => m (Layer i o)
 randLayer = do
   s1 :: Int <- getRandom
   s2 :: Int <- getRandom
   let b = randomVector  s1 Uniform * 2 - 1
-      n = uniformSample s2 (-1) 1
+      n = uniformSample s2 (-1) 1  -- Need to change to Gaussian equivalent.
   return $ Layer b n
 
 
 -- General multi-layer network.
 data Network :: Nat -> [Nat] -> Nat -> * where
-  W    :: !(Layer i o)
-       -> Network i '[] o
+  W     :: !(Layer i o)
+        -> Network i '[] o
   (:&~) :: KnownNat h
-       => !(Layer i h)
-       -> !(Network h hs o)
-       -> Network i (h ': hs) o
+        => !(Layer i h)
+        -> !(Network h hs o)
+        -> Network i (h ': hs) o
+
 infixr 5 :&~
-
-
--- Returns a list of integers corresponding to the widths of the hidden
--- layers of a `Network i hs o`.
-hiddenStruct :: Network i hs o -> [Integer]
-hiddenStruct = \case
-    W _    -> []
-    _ :&~ (n' :: Network h hs' o)
-           -> natVal (Proxy @h)
-            : hiddenStruct n'
 
 
 -- Generates a value of type `Network i hs o`
@@ -268,7 +255,7 @@ runNetwork = \case
   (w :&~ n') -> \(!v) -> let v' = logistic (runLayer w v)
                          in runNetwork n' v'
 
--- | Train a network of type `Network i hs o` using a list of training
+-- Train a network of type `Network i hs o` using a list of training
 -- pairs and the Stochastic Gradient Descent (SGD) approach.
 sgd :: forall i hs o. (KnownNat i, KnownNat o)
     => Double           -- ^ learning rate
@@ -278,7 +265,7 @@ sgd :: forall i hs o. (KnownNat i, KnownNat o)
 sgd rate trn_prs net = foldl' (sgd_step rate) net trn_prs
 
 
--- | Train a network of type `Network i hs o` using a single training pair.
+-- Train a network of type `Network i hs o` using a single training pair.
 --
 -- This code was taken directly from Justin Le's public GitHub archive:
 -- https://github.com/mstksg/inCode/blob/43adae31b5689a95be83a72866600033fcf52b50/code-samples/dependent-haskell/NetworkTyped.hs#L77
