@@ -40,6 +40,7 @@ executable iris
   main-is:             iris.hs
   build-depends:       base >= 4.7 && < 5
                      , haskell-ml
+                     , hmatrix
                      , random-shuffle
   default-language:    Haskell2010
   ghc-options:         -O2

@@ -8,12 +8,15 @@
 {-# OPTIONS_GHC -Wall #-}
 
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
-import System.Random.Shuffle
+import           Control.Arrow
+import           Data.List
+import           System.Random.Shuffle
 
 import Haskell_ML.FCN
 import Haskell_ML.Util
@@ -28,16 +31,29 @@ main = do
   putStrLn "Reading in data..."
   samps    <- readIrisData dataFileName
 
+  -- Make field values uniform over [0,1].
+  let samps' = mkSmplsUniform samps
+
   -- Split according to class, so we can keep equal representation
   -- throughout.
-  let samps1 = filter ((== Setosa)     . snd) samps
-      samps2 = filter ((== Versicolor) . snd) samps
-      samps3 = filter ((== Virginica)  . snd) samps
+  let samps1 = filter ((== Setosa)     . snd) samps'
+      samps2 = filter ((== Versicolor) . snd) samps'
+      samps3 = filter ((== Virginica)  . snd) samps'
+
+      -- Replace attributes record w/ feature vector.
+      samps1' = map (first attributeToVector) samps1
+      samps2' = map (first attributeToVector) samps2
+      samps3' = map (first attributeToVector) samps3
+
+      -- Replace iris type w/ one-hot vector.
+      samps1'' = map (second irisTypeToVector) samps1'
+      samps2'' = map (second irisTypeToVector) samps2'
+      samps3'' = map (second irisTypeToVector) samps3'
 
   -- Shuffle samples.
-  shuffled1 <- shuffleM samps1
-  shuffled2 <- shuffleM samps2
-  shuffled3 <- shuffleM samps3
+  shuffled1 <- shuffleM samps1''
+  shuffled2 <- shuffleM samps2''
+  shuffled3 <- shuffleM samps3''
 
   -- Split into training/testing groups.
   -- We calculate separate lengths, even though we expect all 3 to be
@@ -67,6 +83,7 @@ main = do
   -- Reshuffle.
   trnShuffled <- shuffleM trn
   tstShuffled <- shuffleM tst
+
   putStrLn "Done."
 
   -- Ask user for internal network structure.
@@ -78,7 +95,22 @@ main = do
   putStrLn " - one with 4 output nodes."
   hs <- readLn
   n  <- randNet hs
-  case n of
-    FCNet (net :: Network 4 hs 3) -> do
-      print $ hiddenStruct net
+  putStrLn "Great! Now, enter your desired learning rate."
+  putStrLn "(Should be a decimal floating point value in (0,1)."
+  rate <- readLn
+  -- let n'  = trainNet rate n trnShuffled
+  let (n', accs)  = trainNTimes 10 rate n trnShuffled
+      res = runNet n' $ map fst tstShuffled
+      ref = map snd tstShuffled
+
+  putStrLn $ "Training accuracy: " ++ (show $ accs)
+  putStrLn $ "Test accuracy: " ++ (show $ classificationAccuracy res ref)
+
+{-
+  let layerStrs = getWeights n'
+  putStrLn $ "First layer weights: " ++ (head layerStrs)
+  putStrLn $ "Reference: " ++ (show ref)
+  putStrLn $ "Result: " ++ (show res)
+  putStrLn $ "tstShuffled: " ++ (show tstShuffled)
+-}
 

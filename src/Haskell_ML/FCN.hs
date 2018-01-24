@@ -35,7 +35,8 @@ Portability : ?
 -}
 module Haskell_ML.FCN
   ( FCNet(..), Network
-  , randNet, trainNet, runNet, netTest, hiddenStruct
+  , randNet, trainNet, runNet, netTest, hiddenStruct, getWeights
+  , trainNTimes
   ) where
 
 import Control.Monad.Random
@@ -45,6 +46,8 @@ import Data.Singletons.Prelude
 import Data.Singletons.TypeLits
 import GHC.Generics (Generic)
 import Numeric.LinearAlgebra.Static
+
+import Haskell_ML.Util
 
 
 -- | A fully connected, multi-layer network with fixed input/output
@@ -75,6 +78,20 @@ randNet :: (KnownNat i, KnownNat o, MonadRandom m)
         -> m (FCNet i o)
 randNet hs = withSomeSing hs $ \ss ->
   FCNet <$> randNetwork' ss
+
+
+-- | Train a network on several epochs of the training data, keeping
+-- track of accuracy after each.
+trainNTimes :: (KnownNat i, KnownNat o) => Int -> Double -> FCNet i o -> [(R i, R o)] -> (FCNet i o, [Double])
+trainNTimes = trainNTimes' []
+
+trainNTimes' :: (KnownNat i, KnownNat o) => [Double] -> Int -> Double -> FCNet i o -> [(R i, R o)] -> (FCNet i o, [Double])
+trainNTimes' accs 0 _    net _   = (net, accs)
+trainNTimes' accs n rate net prs = trainNTimes' (accs ++ [acc]) (n-1) rate net' prs
+  where net' = trainNet rate net prs
+        acc  = classificationAccuracy res ref
+        res  = runNet net' $ map fst prs
+        ref  = map snd prs
 
 
 -- | Trains a value of type `FCNet i o`, using the supplied list of
@@ -146,6 +163,16 @@ hiddenStruct = \case
     _ :&~ (n' :: Network h hs' o)
            -> natVal (Proxy @h)
             : hiddenStruct n'
+
+
+-- | Returns a list of strings, each representing one layer of the
+-- network.
+getWeights :: (KnownNat i, KnownNat o) => FCNet i o -> [String]
+getWeights (FCNet net) = getWeights' net
+
+getWeights' :: (KnownNat i, KnownNat o) => Network i hs o -> [String]
+getWeights' (W layer)       = show layer : []
+getWeights' (layer :&~ net) = show layer : getWeights' net
 
 
 -----------------------------------------------------------------------
