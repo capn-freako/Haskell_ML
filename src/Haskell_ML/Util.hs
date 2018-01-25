@@ -150,7 +150,10 @@ classificationAccuracy us vs = calcMeanList $ cmpr us vs
         maxComp :: (KnownNat n) => R n -> R n -> Bool
         maxComp u v = maxIndex (extract u) == maxIndex (extract v)
 
-        calcMeanList = uncurry (/) . foldr (\e (s,c) -> (e+s,c+1)) (0,0)
+
+-- | Calculate the mean value of a list.
+calcMeanList :: (Fractional a) => [a] -> a
+calcMeanList = uncurry (/) . foldr (\e (s,c) -> (e+s,c+1)) (0,0)
 
 
 -- | Pretty printer for values of type `R n`.

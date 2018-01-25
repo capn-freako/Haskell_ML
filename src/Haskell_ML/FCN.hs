@@ -11,12 +11,14 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
@@ -35,7 +37,8 @@ Portability : ?
 -}
 module Haskell_ML.FCN
   ( FCNet(..), Network
-  , randNet, trainNet, runNet, netTest, hiddenStruct, getWeights
+  , randNet, trainNet, runNet, netTest, hiddenStruct
+  , getWeights, getBiases, diffNets
   , trainNTimes
   ) where
 
@@ -44,6 +47,7 @@ import Data.Binary
 import Data.List
 import Data.Singletons.Prelude
 import Data.Singletons.TypeLits
+import Data.Vector.Storable (toList)
 import GHC.Generics (Generic)
 import Numeric.LinearAlgebra.Static
 
@@ -60,7 +64,6 @@ import Haskell_ML.Util
 -- about `hs`, except that it is of kind `[Nat]`.
 data FCNet :: Nat -> Nat -> * where
   FCNet :: (Network i hs o) -> FCNet i o
-
 
 -- | Returns a value of type `FCNet i o`, filled with random weights
 -- ready for training, tucked inside the appropriate Monad, which must
@@ -81,27 +84,27 @@ randNet hs = withSomeSing hs $ \ss ->
 
 
 -- | Train a network on several epochs of the training data, keeping
--- track of accuracy after each.
-trainNTimes :: (KnownNat i, KnownNat o) => Int -> Double -> FCNet i o -> [(R i, R o)] -> (FCNet i o, [Double])
-trainNTimes = trainNTimes' []
+-- track of accuracy and weight/bias changes per layer, after each.
+trainNTimes :: (KnownNat i, KnownNat o)
+            => Int           -- ^ Number of epochs
+            -> Double        -- ^ learning rate
+            -> FCNet i o     -- ^ the network to be trained
+            -> [(R i, R o)]  -- ^ the training pairs
+            -> (FCNet i o, ([Double], [([[Double]], [[Double]])]))
+trainNTimes = trainNTimes' [] []
 
-trainNTimes' :: (KnownNat i, KnownNat o) => [Double] -> Int -> Double -> FCNet i o -> [(R i, R o)] -> (FCNet i o, [Double])
-trainNTimes' accs 0 _    net _   = (net, accs)
-trainNTimes' accs n rate net prs = trainNTimes' (accs ++ [acc]) (n-1) rate net' prs
-  where net' = trainNet rate net prs
-        acc  = classificationAccuracy res ref
-        res  = runNet net' $ map fst prs
-        ref  = map snd prs
-
-
--- | Trains a value of type `FCNet i o`, using the supplied list of
--- training pairs (i.e. - matched input/output vectors).
-trainNet :: (KnownNat i, KnownNat o)
-         => Double        -- ^ learning rate
-         -> FCNet i o     -- ^ the network to be trained
-         -> [(R i, R o)]  -- ^ the training pairs
-         -> FCNet i o     -- ^ the trained network
-trainNet rate (FCNet net) trn_prs = FCNet $ sgd rate trn_prs net
+trainNTimes' :: (KnownNat i, KnownNat o)
+             => [Double]                    -- accuracies
+             -> [([[Double]], [[Double]])]  -- weight/bias differences
+             -> Int -> Double -> FCNet i o -> [(R i, R o)] -> (FCNet i o, ([Double], [([[Double]], [[Double]])]))
+trainNTimes' accs diffs 0 _    net _   = (net, (accs, diffs))
+trainNTimes' accs diffs n rate net prs = trainNTimes' (accs ++ [acc]) (diffs ++ [diff]) (n-1) rate net' prs
+  where net'  = trainNet rate net prs
+        acc   = classificationAccuracy res ref
+        res   = runNet net' $ map fst prs
+        ref   = map snd prs
+        diff  = (getWeights dnet, getBiases dnet)
+        dnet  = diffNets net' net
 
 
 -- | Run a network on a list of inputs.
@@ -165,14 +168,37 @@ hiddenStruct = \case
             : hiddenStruct n'
 
 
--- | Returns a list of strings, each representing one layer of the
--- network.
-getWeights :: (KnownNat i, KnownNat o) => FCNet i o -> [String]
+-- | Returns a list of lists of Doubles, each containing the weights of
+-- one layer of the network.
+getWeights :: (KnownNat i, KnownNat o) => FCNet i o -> [[Double]]
 getWeights (FCNet net) = getWeights' net
 
-getWeights' :: (KnownNat i, KnownNat o) => Network i hs o -> [String]
-getWeights' (W layer)       = show layer : []
-getWeights' (layer :&~ net) = show layer : getWeights' net
+getWeights' :: (KnownNat i, KnownNat o) => Network i hs o -> [[Double]]
+getWeights' (W Layer{..})       = [concat $ map (toList . extract) $ toRows nodes]
+getWeights' (Layer{..} :&~ net) = (concat $ map (toList . extract) $ toRows nodes) : getWeights' net
+
+
+-- | Returns a list of lists of Doubles, each containing the biases of
+-- one layer of the network.
+getBiases :: (KnownNat i, KnownNat o) => FCNet i o -> [[Double]]
+getBiases (FCNet net) = getBiases' net
+
+getBiases' :: (KnownNat i, KnownNat o) => Network i hs o -> [[Double]]
+getBiases' (W Layer{..})       = [toList $ extract biases]
+getBiases' (Layer{..} :&~ net) = (toList $ extract biases) : getBiases' net
+
+
+-- | Takes two networks of the same shape and returns a single network
+-- of that shape containing the differences between the two.
+diffNets :: (KnownNat i, KnownNat o) => FCNet i o -> FCNet i o -> FCNet i o
+diffNets (FCNet n1) (FCNet n2) = FCNet (diffNets' n1 n2)
+
+-- diffNets' :: forall i o hs1 hs2 hs3. (KnownNat i, KnownNat o)
+diffNets' :: (KnownNat i, KnownNat o)
+          => Network i hs1 o -> Network i hs2 o -> Network i hs1 o
+diffNets' (W l1) (W l2) = W (l1 - l2)
+diffNets' (l1 :&~ (n1 :: Network h hs o)) (l2 :&~ (n2 :: Network h hs o)) =
+  (l1 - l2) :&~ (diffNets' n1 n2)
 
 
 -----------------------------------------------------------------------
@@ -186,7 +212,7 @@ getWeights' (layer :&~ net) = show layer : getWeights' net
 data Layer i o = Layer { biases :: !(R o)
                        , nodes  :: !(L o i)
                        }
-  deriving (Show, Generic)
+  deriving (Show, Generic, Num)
 
 instance (KnownNat i, KnownNat o) => Binary (Layer i o)
 
@@ -209,6 +235,7 @@ randLayer = do
 data Network :: Nat -> [Nat] -> Nat -> * where
   W     :: !(Layer i o)
         -> Network i '[] o
+
   (:&~) :: KnownNat h
         => !(Layer i h)
         -> !(Network h hs o)
@@ -282,13 +309,23 @@ runNetwork = \case
   (w :&~ n') -> \(!v) -> let v' = logistic (runLayer w v)
                          in runNetwork n' v'
 
+-- Trains a value of type `FCNet i o`, using the supplied list of
+-- training pairs (i.e. - matched input/output vectors).
+trainNet :: (KnownNat i, KnownNat o)
+         => Double        -- learning rate
+         -> FCNet i o     -- the network to be trained
+         -> [(R i, R o)]  -- the training pairs
+         -> FCNet i o     -- the trained network
+trainNet rate (FCNet net) trn_prs = FCNet $ sgd rate trn_prs net
+
+
 -- Train a network of type `Network i hs o` using a list of training
 -- pairs and the Stochastic Gradient Descent (SGD) approach.
 sgd :: forall i hs o. (KnownNat i, KnownNat o)
-    => Double           -- ^ learning rate
-    -> [(R i, R o)]     -- ^ training pairs
-    -> Network i hs o   -- ^ network to train
-    -> Network i hs o   -- ^ trained network
+    => Double           -- learning rate
+    -> [(R i, R o)]     -- training pairs
+    -> Network i hs o   -- network to train
+    -> Network i hs o   -- trained network
 sgd rate trn_prs net = foldl' (sgd_step rate) net trn_prs
 
 
@@ -298,17 +335,17 @@ sgd rate trn_prs net = foldl' (sgd_step rate) net trn_prs
 -- https://github.com/mstksg/inCode/blob/43adae31b5689a95be83a72866600033fcf52b50/code-samples/dependent-haskell/NetworkTyped.hs#L77
 -- and modified only slightly.
 sgd_step :: forall i hs o. (KnownNat i, KnownNat o)
-         => Double           -- ^ learning rate
-         -> Network i hs o   -- ^ network to train
-         -> (R i, R o)       -- ^ training pair
-         -> Network i hs o   -- ^ trained network
+         => Double           -- learning rate
+         -> Network i hs o   -- network to train
+         -> (R i, R o)       -- training pair
+         -> Network i hs o   -- trained network
 sgd_step rate net trn_pr = fst $ go x0 net
   where
     x0     = fst trn_pr
     target = snd trn_pr
     go  :: forall j js. KnownNat j
-        => R j              -- ^ input vector
-        -> Network j js o   -- ^ network to train
+        => R j              -- input vector
+        -> Network j js o   -- network to train
         -> (Network j js o, R j)
     go !x (W w@(Layer wB wN))
         = let y    = runLayer w x
