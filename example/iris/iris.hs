@@ -98,12 +98,11 @@ main = do
   putStrLn "Great! Now, enter your desired learning rate."
   putStrLn "(Should be a decimal floating point value in (0,1)."
   rate <- readLn
-  let (n', (accs, diffs))  = trainNTimes 10 rate n trnShuffled
+  let (n', (accs, diffs))  = trainNTimes 60 rate n trnShuffled
       res = runNet n' $ map fst tstShuffled
       ref = map snd tstShuffled
 
-  putStrLn $ "Training accuracy: " ++ (show $ accs)
+  putStrLn $ "Training accuracy:"
   putStrLn $ asciiPlot accs
-  putStrLn $ asciiPlot [0,1,2,3,4,5,6,7,8,9,8,7,6,5,4,3,2,1,0,0,1]
   putStrLn $ "Test accuracy: " ++ (show $ classificationAccuracy res ref)
 

@@ -169,16 +169,34 @@ printVecPair (u, v) = "( " ++ printVector u ++ ", " ++ printVector v ++ " )"
 
 -- | Plot a list of Doubles to an ASCII terminal.
 asciiPlot :: [Double] -> String
-asciiPlot xs = unlines $ (:) "^" $ transpose (
-  (:) "|||||||||||" $
-  for (take 60 xs) $ \x ->
-    valToStr $ (x - x_min) * 10 / x_range
-  ) ++ ["|" ++ (replicate 60 '_') ++ ">"]
-      where valToStr   :: Double -> String
+asciiPlot xs = unlines $
+  zipWith (++)
+    [ "     "
+    , printf " %3.1f " x_max
+    , "     "
+    , "     "
+    , "     "
+    , "     "
+    , "     "
+    , "     "
+    , "     "
+    , "     "
+    , "     "
+    , printf " %3.1f " x_min
+    , "     "
+    ] $
+    (:) "^" $ transpose (
+    (:) "|||||||||||" $
+    for (take 60 xs) $ \x ->
+      valToStr $ (x - x_min) * 10 / x_range
+    ) ++ ["|" ++ (replicate 60 '_') ++ ">"]
+
+      where valToStr  :: Double -> String
             valToStr x = let i = round (10 - x)
                           in replicate i ' ' ++ "*" ++ (replicate (10 - i) ' ')
             x_min      = minimum xs
-            x_range    = maximum xs - x_min
+            x_max      = maximum xs
+            x_range    = x_max - x_min
 
 
 -----------------------------------------------------------------------
