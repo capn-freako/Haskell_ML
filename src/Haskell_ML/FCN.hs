@@ -38,7 +38,7 @@ Portability : ?
 module Haskell_ML.FCN
   ( FCNet(..), Network
   , randNet, trainNet, runNet, netTest, hiddenStruct
-  , getWeights, getBiases, diffNets
+  , getWeights, getBiases
   , trainNTimes
   ) where
 
@@ -103,8 +103,8 @@ trainNTimes' accs diffs n rate net prs = trainNTimes' (accs ++ [acc]) (diffs ++ 
         acc   = classificationAccuracy res ref
         res   = runNet net' $ map fst prs
         ref   = map snd prs
-        diff  = (getWeights dnet, getBiases dnet)
-        dnet  = diffNets net' net
+        diff  = ( zipWith (zipWith (-)) (getWeights net') (getWeights net)
+                , zipWith (zipWith (-)) (getBiases  net') (getBiases  net) )
 
 
 -- | Run a network on a list of inputs.
@@ -188,19 +188,6 @@ getBiases' (W Layer{..})       = [toList $ extract biases]
 getBiases' (Layer{..} :&~ net) = (toList $ extract biases) : getBiases' net
 
 
--- | Takes two networks of the same shape and returns a single network
--- of that shape containing the differences between the two.
-diffNets :: (KnownNat i, KnownNat o) => FCNet i o -> FCNet i o -> FCNet i o
-diffNets (FCNet n1) (FCNet n2) = FCNet (diffNets' n1 n2)
-
--- diffNets' :: forall i o hs1 hs2 hs3. (KnownNat i, KnownNat o)
-diffNets' :: (KnownNat i, KnownNat o)
-          => Network i hs1 o -> Network i hs2 o -> Network i hs1 o
-diffNets' (W l1) (W l2) = W (l1 - l2)
-diffNets' (l1 :&~ (n1 :: Network h hs o)) (l2 :&~ (n2 :: Network h hs o)) =
-  (l1 - l2) :&~ (diffNets' n1 n2)
-
-
 -----------------------------------------------------------------------
 -- All following functions are for internal library use only!
 -- They are not exported through the API.
@@ -212,7 +199,7 @@ diffNets' (l1 :&~ (n1 :: Network h hs o)) (l2 :&~ (n2 :: Network h hs o)) =
 data Layer i o = Layer { biases :: !(R o)
                        , nodes  :: !(L o i)
                        }
-  deriving (Show, Generic, Num)
+  deriving (Show, Generic)
 
 instance (KnownNat i, KnownNat o) => Binary (Layer i o)
 

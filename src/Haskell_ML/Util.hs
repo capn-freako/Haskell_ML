@@ -26,13 +26,14 @@ module Haskell_ML.Util
   ( Iris(..), Attributes(..), Sample
   , readIrisData, attributeToVector, irisTypeToVector
   , classificationAccuracy, printVector, printVecPair, mkSmplsUniform
+  , asciiPlot
   ) where
 
 import           Control.Applicative
 import           Control.Arrow
 import           Data.List
 import qualified Data.Text as T
-import           Data.Attoparsec.Text
+import           Data.Attoparsec.Text hiding (take)
 import           Data.Singletons.TypeLits
 import           Numeric.LinearAlgebra.Data (maxIndex, toList)
 import           Numeric.LinearAlgebra.Static
@@ -164,6 +165,20 @@ printVector v = (foldl' (\ s x -> s ++ (printf "%+6.4f  " x)) "[ " ((toList . ex
 -- | Pretty printer for values of type `(R m, R n)`.
 printVecPair :: (KnownNat m, KnownNat n) => (R m, R n) -> String
 printVecPair (u, v) = "( " ++ printVector u ++ ", " ++ printVector v ++ " )"
+
+
+-- | Plot a list of Doubles to an ASCII terminal.
+asciiPlot :: [Double] -> String
+asciiPlot xs = unlines $ (:) "^" $ transpose (
+  (:) "|||||||||||" $
+  for (take 60 xs) $ \x ->
+    valToStr $ (x - x_min) * 10 / x_range
+  ) ++ ["|" ++ (replicate 60 '_') ++ ">"]
+      where valToStr   :: Double -> String
+            valToStr x = let i = round (10 - x)
+                          in replicate i ' ' ++ "*" ++ (replicate (10 - i) ' ')
+            x_min      = minimum xs
+            x_range    = maximum xs - x_min
 
 
 -----------------------------------------------------------------------
