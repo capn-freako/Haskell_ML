@@ -70,7 +70,7 @@ readIrisData fname = do
     return $ f <$> ls
 
   where
-    f l = case (parseOnly sampleParser l) of
+    f l = case parseOnly sampleParser l of
             Left msg -> error msg
             Right x  -> x
 
@@ -98,29 +98,22 @@ mkSmplsUniform samps = map (first $ scaleAtt . offsetAtt) samps
 -- | Finds the minimum value, for a particular `Attributes` field, in a
 -- list of samples.
 minFldVal :: (Attributes -> Double) -> [Sample] -> Double
--- minFldVal fldAcc samps = min $ map (fldAcc . fst) samps
--- minFldVal fldAcc = min $ fldFromSamps fldAcc
 minFldVal = overSamps minimum
 
 
 -- | Finds the maximum value, for a particular `Attributes` field, in a
 -- list of samples.
 maxFldVal :: (Attributes -> Double) -> [Sample] -> Double
--- maxFldVal fldAcc samps = max $ fldFromSamps fldAcc samps
--- maxFldVal fldAcc = max . fldFromSamps fldAcc
 maxFldVal = overSamps maximum
 
 
 -- | Applies a reduction to an `Attributes` field in a list of `Sample`s.
 overSamps :: ([Double] -> Double) -> (Attributes -> Double) -> [Sample] -> Double
--- overSamps f fldAcc samps = f $ fldFromSamps fldAcc samps
 overSamps f fldAcc = f . fldFromSamps fldAcc
--- overSamps f = f ((.) . (.)) fldFromSamps
 
 
 -- | Extracts the values of a `Attributes` field from a list of `Sample`s.
 fldFromSamps :: (Attributes -> Double) -> [Sample] -> [Double]
--- fldFromSamps fldAcc samps = map (fldAcc . fst) samps
 fldFromSamps fldAcc = map (fldAcc . fst)
 
 
@@ -159,7 +152,7 @@ calcMeanList = uncurry (/) . foldr (\e (s,c) -> (e+s,c+1)) (0,0)
 
 -- | Pretty printer for values of type `R n`.
 printVector :: (KnownNat n) => R n -> String
-printVector v = (foldl' (\ s x -> s ++ (printf "%+6.4f  " x)) "[ " ((toList . extract) v)) ++ " ]"
+printVector v = foldl' (\ s x -> s ++ printf "%+6.4f  " x) "[ " ((toList . extract) v) ++ " ]"
 
 
 -- | Pretty printer for values of type `(R m, R n)`.
@@ -189,11 +182,11 @@ asciiPlot xs = unlines $
     (:) "|||||||||||" $
     for (take 60 xs) $ \x ->
       valToStr $ (x - x_min) * 10 / x_range
-    ) ++ ["|" ++ (replicate 60 '_') ++ ">"]
+    ) ++ ["|" ++ replicate 60 '_' ++ ">"]
 
       where valToStr  :: Double -> String
             valToStr x = let i = round (10 - x)
-                          in replicate i ' ' ++ "*" ++ (replicate (10 - i) ' ')
+                          in replicate i ' ' ++ "*" ++ replicate (10 - i) ' '
             x_min      = minimum xs
             x_max      = maximum xs
             x_range    = x_max - x_min

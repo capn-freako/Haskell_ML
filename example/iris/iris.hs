@@ -8,14 +8,12 @@
 {-# OPTIONS_GHC -Wall #-}
 
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
 import           Control.Arrow
-import           Data.List
 import           System.Random.Shuffle
 
 import Haskell_ML.FCN
@@ -101,7 +99,7 @@ main = do
   let (n', (accs, diffs))  = trainNTimes 60 rate n trnShuffled
       res = runNet n' $ map fst tstShuffled
       ref = map snd tstShuffled
-  putStrLn $ "Test accuracy: " ++ (show $ classificationAccuracy res ref)
+  putStrLn $ "Test accuracy: " ++ show (classificationAccuracy res ref)
 
   putStrLn "Training accuracy:"
   putStrLn $ asciiPlot accs

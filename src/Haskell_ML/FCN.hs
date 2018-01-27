@@ -11,7 +11,6 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ExplicitForAll #-}
 {-# LANGUAGE GADTs #-}
@@ -20,7 +19,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -63,7 +61,7 @@ import Haskell_ML.Util
 -- with it in a completely polymorphic fashion. You may assume nothing
 -- about `hs`, except that it is of kind `[Nat]`.
 data FCNet :: Nat -> Nat -> * where
-  FCNet :: (Network i hs o) -> FCNet i o
+  FCNet :: Network i hs o -> FCNet i o
 
 -- | Returns a value of type `FCNet i o`, filled with random weights
 -- ready for training, tucked inside the appropriate Monad, which must
@@ -79,8 +77,7 @@ data FCNet :: Nat -> Nat -> * where
 randNet :: (KnownNat i, KnownNat o, MonadRandom m)
         => [Integer]
         -> m (FCNet i o)
-randNet hs = withSomeSing hs $ \ss ->
-  FCNet <$> randNetwork' ss
+randNet hs = withSomeSing hs (fmap FCNet . randNetwork')
 
 
 -- | Train a network on several epochs of the training data, keeping
@@ -112,7 +109,7 @@ runNet :: (KnownNat i, KnownNat o)
        => FCNet i o  -- ^ the network to run
        -> [R i]      -- ^ the list of inputs
        -> [R o]      -- ^ the list of outputs
-runNet (FCNet n) in_prs = map (runNetwork n) in_prs
+runNet (FCNet n) = map (runNetwork n)
 
 
 -- | `Binary` instance definition for `FCNet i o`.
@@ -174,8 +171,8 @@ getWeights :: (KnownNat i, KnownNat o) => FCNet i o -> [[Double]]
 getWeights (FCNet net) = getWeights' net
 
 getWeights' :: (KnownNat i, KnownNat o) => Network i hs o -> [[Double]]
-getWeights' (W Layer{..})       = [concat $ map (toList . extract) $ toRows nodes]
-getWeights' (Layer{..} :&~ net) = (concat $ map (toList . extract) $ toRows nodes) : getWeights' net
+getWeights' (W Layer{..})       = [concatMap (toList . extract) (toRows nodes)]
+getWeights' (Layer{..} :&~ net) = concatMap (toList . extract) (toRows nodes) : getWeights' net
 
 
 -- | Returns a list of lists of Doubles, each containing the biases of
@@ -185,7 +182,7 @@ getBiases (FCNet net) = getBiases' net
 
 getBiases' :: (KnownNat i, KnownNat o) => Network i hs o -> [[Double]]
 getBiases' (W Layer{..})       = [toList $ extract biases]
-getBiases' (Layer{..} :&~ net) = (toList $ extract biases) : getBiases' net
+getBiases' (Layer{..} :&~ net) = toList (extract biases) : getBiases' net
 
 
 -----------------------------------------------------------------------
@@ -278,8 +275,7 @@ getFCNet :: (KnownNat i, KnownNat o)
          => Get (FCNet i o)
 getFCNet = do
   hs <- get
-  withSomeSing hs $ \ss ->
-    FCNet <$> getNet ss
+  withSomeSing hs (fmap FCNet . getNet)
 
 runLayer :: (KnownNat i, KnownNat o)
          => Layer i o
@@ -313,7 +309,7 @@ sgd :: forall i hs o. (KnownNat i, KnownNat o)
     -> [(R i, R o)]     -- training pairs
     -> Network i hs o   -- network to train
     -> Network i hs o   -- trained network
-sgd rate trn_prs net = foldl' (sgd_step rate) net trn_prs
+sgd rate trn_prs net = foldl' (sgdStep rate) net trn_prs
 
 
 -- Train a network of type `Network i hs o` using a single training pair.
@@ -321,12 +317,12 @@ sgd rate trn_prs net = foldl' (sgd_step rate) net trn_prs
 -- This code was taken directly from Justin Le's public GitHub archive:
 -- https://github.com/mstksg/inCode/blob/43adae31b5689a95be83a72866600033fcf52b50/code-samples/dependent-haskell/NetworkTyped.hs#L77
 -- and modified only slightly.
-sgd_step :: forall i hs o. (KnownNat i, KnownNat o)
+sgdStep :: forall i hs o. (KnownNat i, KnownNat o)
          => Double           -- learning rate
          -> Network i hs o   -- network to train
          -> (R i, R o)       -- training pair
          -> Network i hs o   -- trained network
-sgd_step rate net trn_pr = fst $ go x0 net
+sgdStep rate net trn_pr = fst $ go x0 net
   where
     x0     = fst trn_pr
     target = snd trn_pr
