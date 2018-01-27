@@ -27,6 +27,7 @@ module Haskell_ML.Util
   , readIrisData, attributeToVector, irisTypeToVector
   , classificationAccuracy, printVector, printVecPair, mkSmplsUniform
   , asciiPlot, calcMeanList
+  , for
   ) where
 
 import           Control.Applicative

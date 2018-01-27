@@ -14,6 +14,8 @@
 module Main where
 
 import           Control.Arrow
+import           Control.Monad
+import           Data.List
 import           System.Random.Shuffle
 
 import Haskell_ML.FCN
@@ -104,12 +106,20 @@ main = do
   putStrLn "Training accuracy:"
   putStrLn $ asciiPlot accs
 
-  putStrLn "Average variance in first layer weights:"
-  putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x) . head . fst) diffs
-  putStrLn "Average variance in second layer weights:"
-  putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x) . head . tail . fst) diffs
-  putStrLn "Average variance in first layer biases:"
-  putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x) . head . snd) diffs
-  putStrLn "Average variance in second layer biases:"
-  putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x) . head . tail . snd) diffs
+  -- diffs      :: [([[Double]],  [[Double]])]   -- Epoch (Layer (Weights), Layer (Biases))
+  -- diffs_t    :: ([[[Double]]], [[[Double]]])  -- (Layer (Epoch (Weights)), Layer (Epoch (Biases)))
+  -- weights_ix :: [(Int, [[Double]])]           -- Layer (n, Epoch (Weights))
+  -- let diffs_t = transpose diffs  -- from list of pairs to pair of lists
+  --     -- weights_ix = (zip [1,2..] . transpose . fst) diffs_t  -- Indexing layers.
+  --     -- biases_ix  = (zip [1,2..] . transpose . snd) diffs_t  -- Indexing layers.
+  --     weights_ix = (zip [1,2..] . fst) diffs_t  -- Indexing layers.
+  --     biases_ix  = (zip [1,2..] . snd) diffs_t  -- Indexing layers.
+  let weights = zip [1::Int,2..] $ (transpose . map fst) diffs
+      biases  = zip [1::Int,2..] $ (transpose . map snd) diffs
+  forM_ weights $ \ (i, ws) -> do
+    putStrLn $ "Average variance in layer " ++ show i ++ " weights:"
+    putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x)) ws
+  forM_ biases $ \ (i, bs) -> do
+    putStrLn $ "Average variance in layer " ++ show i ++ " biases:"
+    putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x)) bs
 
