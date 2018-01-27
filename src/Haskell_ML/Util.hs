@@ -26,7 +26,7 @@ module Haskell_ML.Util
   ( Iris(..), Attributes(..), Sample
   , readIrisData, attributeToVector, irisTypeToVector
   , classificationAccuracy, printVector, printVecPair, mkSmplsUniform
-  , asciiPlot
+  , asciiPlot, calcMeanList
   ) where
 
 import           Control.Applicative
@@ -171,19 +171,19 @@ printVecPair (u, v) = "( " ++ printVector u ++ ", " ++ printVector v ++ " )"
 asciiPlot :: [Double] -> String
 asciiPlot xs = unlines $
   zipWith (++)
-    [ "     "
-    , printf " %3.1f " x_max
-    , "     "
-    , "     "
-    , "     "
-    , "     "
-    , "     "
-    , "     "
-    , "     "
-    , "     "
-    , "     "
-    , printf " %3.1f " x_min
-    , "     "
+    [ "        "
+    , printf " %6.4f " x_max
+    , "        "
+    , "        "
+    , "        "
+    , "        "
+    , "        "
+    , "        "
+    , "        "
+    , "        "
+    , "        "
+    , printf " %6.4f " x_min
+    , "        "
     ] $
     (:) "^" $ transpose (
     (:) "|||||||||||" $

@@ -101,8 +101,17 @@ main = do
   let (n', (accs, diffs))  = trainNTimes 60 rate n trnShuffled
       res = runNet n' $ map fst tstShuffled
       ref = map snd tstShuffled
-
-  putStrLn $ "Training accuracy:"
-  putStrLn $ asciiPlot accs
   putStrLn $ "Test accuracy: " ++ (show $ classificationAccuracy res ref)
+
+  putStrLn "Training accuracy:"
+  putStrLn $ asciiPlot accs
+
+  putStrLn "Average variance in first layer weights:"
+  putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x) . head . fst) diffs
+  putStrLn "Average variance in second layer weights:"
+  putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x) . head . tail . fst) diffs
+  putStrLn "Average variance in first layer biases:"
+  putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x) . head . snd) diffs
+  putStrLn "Average variance in second layer biases:"
+  putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x) . head . tail . snd) diffs
 
