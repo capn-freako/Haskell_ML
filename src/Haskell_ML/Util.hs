@@ -118,12 +118,12 @@ fldFromSamps :: (Attributes -> Double) -> [Sample] -> [Double]
 fldFromSamps fldAcc = map (fldAcc . fst)
 
 
--- | Convert a value of type `Attributes` to a value of type `R 4`.
+-- | Convert a value of type `Attributes` to a value of type `R` 4.
 attributeToVector :: Attributes -> R 4
 attributeToVector Attributes{..} = vector [sepLen, sepWidth, pedLen, pedWidth]
 
 
--- | Convert a value of type `Iris` to a one-hot vector value of type `R 3`.
+-- | Convert a value of type `Iris` to a one-hot vector value of type `R` 3.
 irisTypeToVector :: Iris -> R 3
 irisTypeToVector = \case
   Setosa     -> vector [1,0,0]
@@ -152,12 +152,12 @@ calcMeanList :: (Fractional a) => [a] -> a
 calcMeanList = uncurry (/) . foldr (\e (s,c) -> (e+s,c+1)) (0,0)
 
 
--- | Pretty printer for values of type `R n`.
+-- | Pretty printer for values of type `R` n.
 printVector :: (KnownNat n) => R n -> String
 printVector v = foldl' (\ s x -> s ++ printf "%+6.4f  " x) "[ " ((toList . extract) v) ++ " ]"
 
 
--- | Pretty printer for values of type `(R m, R n)`.
+-- | Pretty printer for values of type (`R` `m`, `R` `n`).
 printVecPair :: (KnownNat m, KnownNat n) => (R m, R n) -> String
 printVecPair (u, v) = "( " ++ printVector u ++ ", " ++ printVector v ++ " )"
 
@@ -216,7 +216,7 @@ sampleParser = f <$> (double <* char ',')
                  <|> string "Iris-virginica"  *> return Virginica
 
 
--- | Convenience function (= `flip map`).
+-- | Convenience function (= flip map).
 for :: [a] -> (a -> b) -> [b]
 for = flip map
 

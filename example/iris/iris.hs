@@ -9,6 +9,7 @@
 
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
@@ -98,22 +99,16 @@ main = do
   putStrLn "Great! Now, enter your desired learning rate."
   putStrLn "(Should be a decimal floating point value in (0,1)."
   rate <- readLn
-  let (n', (accs, diffs))  = trainNTimes 60 rate n trnShuffled
+  let (n', TrainEvo{..}) = trainNTimes 60 rate n trnShuffled
       res = runNet n' $ map fst tstShuffled
       ref = map snd tstShuffled
   putStrLn $ "Test accuracy: " ++ show (classificationAccuracy res ref)
 
+  -- Plot the evolution of the training accuracy.
   putStrLn "Training accuracy:"
   putStrLn $ asciiPlot accs
 
-  -- diffs      :: [([[Double]],  [[Double]])]   -- Epoch (Layer (Weights), Layer (Biases))
-  -- diffs_t    :: ([[[Double]]], [[[Double]]])  -- (Layer (Epoch (Weights)), Layer (Epoch (Biases)))
-  -- weights_ix :: [(Int, [[Double]])]           -- Layer (n, Epoch (Weights))
-  -- let diffs_t = transpose diffs  -- from list of pairs to pair of lists
-  --     -- weights_ix = (zip [1,2..] . transpose . fst) diffs_t  -- Indexing layers.
-  --     -- biases_ix  = (zip [1,2..] . transpose . snd) diffs_t  -- Indexing layers.
-  --     weights_ix = (zip [1,2..] . fst) diffs_t  -- Indexing layers.
-  --     biases_ix  = (zip [1,2..] . snd) diffs_t  -- Indexing layers.
+  -- Plot the evolution of the weights and biases.
   let weights = zip [1::Int,2..] $ (transpose . map fst) diffs
       biases  = zip [1::Int,2..] $ (transpose . map snd) diffs
   forM_ weights $ \ (i, ws) -> do

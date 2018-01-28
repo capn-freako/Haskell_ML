@@ -34,7 +34,7 @@ Stability   : experimental
 Portability : ?
 -}
 module Haskell_ML.FCN
-  ( FCNet(..), Network
+  ( FCNet(), TrainEvo(..)
   , randNet, runNet, netTest, hiddenStruct
   , getWeights, getBiases
   , trainNTimes
@@ -54,22 +54,12 @@ import Haskell_ML.Util
 
 -- | A fully connected, multi-layer network with fixed input/output
 -- widths, but variable (and existentially hidden!) internal structure.
---
--- Note: If you expose the inner value (of type `Network i hs o`), via
--- pattern matching, while `i` and `o` can be determined automatically,
--- via type inferencing, `hs` cannot, and you must be prepared to deal
--- with it in a completely polymorphic fashion. You may assume nothing
--- about `hs`, except that it is of kind `[Nat]`.
---
--- Note that the constructor should be used for pattern matching only!
--- To actually create a value to be passed around, use the `randNet`
--- function.
 data FCNet :: Nat -> Nat -> * where
   FCNet :: Network i hs o -> FCNet i o
 
--- | Returns a value of type `FCNet i o`, filled with random weights
+-- | Returns a value of type `FCNet`, filled with random weights
 -- ready for training, tucked inside the appropriate Monad, which must
--- be an instance of `MonadRandom`. (IO is such an instance.)
+-- be an instance of `MonadRandom` . (IO is such an instance.)
 --
 -- The input/output widths are determined by the compiler automatically,
 -- via type inferencing.
@@ -84,6 +74,13 @@ randNet :: (KnownNat i, KnownNat o, MonadRandom m)
 randNet hs = withSomeSing hs (fmap FCNet . randNetwork')
 
 
+-- | Data type for holding training evolution data.
+data TrainEvo = TrainEvo
+  { accs  :: [Double]                   -- ^ training accuracies
+  , diffs :: [([[Double]],[[Double]])]  -- ^ differences of weights/biases, by layer
+  }
+
+
 -- | Train a network on several epochs of the training data, keeping
 -- track of accuracy and weight/bias changes per layer, after each.
 trainNTimes :: (KnownNat i, KnownNat o)
@@ -91,14 +88,14 @@ trainNTimes :: (KnownNat i, KnownNat o)
             -> Double        -- ^ learning rate
             -> FCNet i o     -- ^ the network to be trained
             -> [(R i, R o)]  -- ^ the training pairs
-            -> (FCNet i o, ([Double], [([[Double]], [[Double]])]))
+            -> (FCNet i o, TrainEvo)
 trainNTimes = trainNTimes' [] []
 
 trainNTimes' :: (KnownNat i, KnownNat o)
              => [Double]                    -- accuracies
              -> [([[Double]], [[Double]])]  -- weight/bias differences
-             -> Int -> Double -> FCNet i o -> [(R i, R o)] -> (FCNet i o, ([Double], [([[Double]], [[Double]])]))
-trainNTimes' accs diffs 0 _    net _   = (net, (accs, diffs))
+             -> Int -> Double -> FCNet i o -> [(R i, R o)] -> (FCNet i o, TrainEvo)
+trainNTimes' accs diffs 0 _    net _   = (net, TrainEvo accs diffs)
 trainNTimes' accs diffs n rate net prs = trainNTimes' (accs ++ [acc]) (diffs ++ [diff]) (n-1) rate net' prs
   where net'  = trainNet rate net prs
         acc   = classificationAccuracy res ref
@@ -116,7 +113,7 @@ runNet :: (KnownNat i, KnownNat o)
 runNet (FCNet n) = map (runNetwork n)
 
 
--- | `Binary` instance definition for `FCNet i o`.
+-- | `Binary` instance definition for `FCNet`.
 --
 -- With this definition, the user of our library is able to use standard
 -- `put` and `get` calls, to serialize his created/trained network for
@@ -160,13 +157,16 @@ netTest rate n = do
 
 
 -- | Returns a list of integers corresponding to the widths of the hidden
--- layers of a `Network i hs o`.
-hiddenStruct :: Network i hs o -> [Integer]
-hiddenStruct = \case
+-- layers of a `FCNet`.
+hiddenStruct :: FCNet i o -> [Integer]
+hiddenStruct (FCNet net) = hiddenStruct' net
+
+hiddenStruct' :: Network i hs o -> [Integer]
+hiddenStruct' = \case
     W _    -> []
     _ :&~ (n' :: Network h hs' o)
            -> natVal (Proxy @h)
-            : hiddenStruct n'
+            : hiddenStruct' n'
 
 
 -- | Returns a list of lists of Doubles, each containing the weights of
@@ -214,13 +214,11 @@ randLayer :: (MonadRandom m, KnownNat i, KnownNat o)
 randLayer = do
   s1 :: Int <- getRandom
   s2 :: Int <- getRandom
-  let b = randomVector  s1 Uniform * 2 - 1
-      n = uniformSample s2 (-1) 1  -- Need to change to Gaussian equivalent.
+  let b = randomVector  s1 Uniform * 2 - 1  -- Need to change to Gaussian equivalent.
+      n = uniformSample s2 (-1) 1           -- Need to change to Gaussian equivalent.
   return $ Layer b n
 
 
--- | General multi-layer network.
---
 -- This is the network structure that `FCNet i o` wraps, hiding its
 -- internal structure existentially, outside of the library.
 data Network :: Nat -> [Nat] -> Nat -> * where
@@ -247,7 +245,7 @@ randNetwork = randNetwork' sing
 randNetwork' :: forall m i hs o. (MonadRandom m, KnownNat i, KnownNat o)
              => Sing hs -> m (Network i hs o)
 randNetwork' = \case
-  SNil            -> W    <$> randLayer
+  SNil            -> W     <$> randLayer
   SNat `SCons` ss -> (:&~) <$> randLayer <*> randNetwork' ss
 
 
@@ -275,7 +273,7 @@ putFCNet :: (KnownNat i, KnownNat o)
          => FCNet i o
          -> Put
 putFCNet (FCNet net) = do
-  put (hiddenStruct net)
+  put (hiddenStruct' net)
   putNet net
 
 getFCNet :: (KnownNat i, KnownNat o)
