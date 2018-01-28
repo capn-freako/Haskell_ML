@@ -132,6 +132,7 @@ irisTypeToVector = \case
 
 
 -- | Calculate the classification accuracy, given:
+--
 --   - a list of results vectors, and
 --   - a list of reference vectors.
 classificationAccuracy :: (KnownNat n) => [R n] -> [R n] -> Double
@@ -215,6 +216,7 @@ sampleParser = f <$> (double <* char ',')
                  <|> string "Iris-virginica"  *> return Virginica
 
 
+-- | Convenience function (= `flip map`).
 for :: [a] -> (a -> b) -> [b]
 for = flip map
 

@@ -35,7 +35,7 @@ Portability : ?
 -}
 module Haskell_ML.FCN
   ( FCNet(..), Network
-  , randNet, trainNet, runNet, netTest, hiddenStruct
+  , randNet, runNet, netTest, hiddenStruct
   , getWeights, getBiases
   , trainNTimes
   ) where
@@ -60,6 +60,10 @@ import Haskell_ML.Util
 -- via type inferencing, `hs` cannot, and you must be prepared to deal
 -- with it in a completely polymorphic fashion. You may assume nothing
 -- about `hs`, except that it is of kind `[Nat]`.
+--
+-- Note that the constructor should be used for pattern matching only!
+-- To actually create a value to be passed around, use the `randNet`
+-- function.
 data FCNet :: Nat -> Nat -> * where
   FCNet :: Network i hs o -> FCNet i o
 
@@ -215,7 +219,10 @@ randLayer = do
   return $ Layer b n
 
 
--- General multi-layer network.
+-- | General multi-layer network.
+--
+-- This is the network structure that `FCNet i o` wraps, hiding its
+-- internal structure existentially, outside of the library.
 data Network :: Nat -> [Nat] -> Nat -> * where
   W     :: !(Layer i o)
         -> Network i '[] o

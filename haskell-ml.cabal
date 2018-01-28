@@ -1,5 +1,5 @@
 name:                haskell-ml
-version:             0.1.0.0
+version:             0.3.1
 synopsis:            Machine learning in Haskell
 description:         Machine learning in Haskell
 license:             BSD3
