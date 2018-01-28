@@ -208,14 +208,14 @@ instance (KnownNat i, KnownNat o) => Binary (Layer i o)
 -- Generates a value of type `Layer i o`, filled with normally
 -- distributed random values, tucked inside the appropriate Monad, which
 -- must be an instance of `MonadRandom`.
--- TODO: Change from uniform to normal.
-randLayer :: (MonadRandom m, KnownNat i, KnownNat o)
+randLayer :: forall m i o. (MonadRandom m, KnownNat i, KnownNat o)
           => m (Layer i o)
 randLayer = do
   s1 :: Int <- getRandom
   s2 :: Int <- getRandom
-  let b = randomVector  s1 Uniform * 2 - 1  -- Need to change to Gaussian equivalent.
-      n = uniformSample s2 (-1) 1           -- Need to change to Gaussian equivalent.
+  let m = eye
+      b = randomVector s2 Gaussian
+      n = gaussianSample s1 (takeDiag m) (sym m)
   return $ Layer b n
 
 
