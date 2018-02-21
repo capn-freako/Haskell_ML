@@ -24,7 +24,8 @@ Portability : ?
 -}
 module Haskell_ML.Util
   ( Iris(..), Attributes(..), Sample
-  , readIrisData, attributeToVector, irisTypeToVector
+  , readIrisData, splitIrisData, splitTrnTst
+  , attributeToVector, irisTypeToVector
   , classificationAccuracy, printVector, printVecPair, mkSmplsUniform
   , asciiPlot, calcMeanList
   , for
@@ -74,6 +75,34 @@ readIrisData fname = do
     f l = case parseOnly sampleParser l of
             Left msg -> error msg
             Right x  -> x
+
+
+-- | Split Iris dataset into classes and apply some preconditioning.
+splitIrisData :: [Sample] -> ([(R 4, R 3)],[(R 4, R 3)],[(R 4, R 3)])
+splitIrisData samps' =
+  let samps1 = filter ((== Setosa)     . snd) samps'
+      samps2 = filter ((== Versicolor) . snd) samps'
+      samps3 = filter ((== Virginica)  . snd) samps'
+
+      -- Replace attributes record w/ feature vector.
+      samps1' = map (first attributeToVector) samps1
+      samps2' = map (first attributeToVector) samps2
+      samps3' = map (first attributeToVector) samps3
+
+      -- Replace iris type w/ one-hot vector.
+      samps1'' = map (second irisTypeToVector) samps1'
+      samps2'' = map (second irisTypeToVector) samps2'
+      samps3'' = map (second irisTypeToVector) samps3'
+   in (samps1'', samps2'', samps3'')
+
+
+-- | Split a list of samples into training/testing sets.
+splitTrnTst :: [a] -> ([a],[a])
+splitTrnTst xs =
+  let n   = length xs * 80 `div` 100
+      trn = take n xs
+      tst = drop n xs
+   in (trn, tst)
 
 
 -- | Rescale all feature values, to fall in [0,1].

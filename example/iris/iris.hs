@@ -14,7 +14,6 @@
 
 module Main where
 
-import           Control.Arrow
 import           Control.Monad
 import           Data.List
 import           System.Random.Shuffle
@@ -32,52 +31,15 @@ main = do
   putStrLn "Reading in data..."
   samps    <- readIrisData dataFileName
 
-  -- Make field values uniform over [0,1].
-  let samps' = mkSmplsUniform samps
+  -- Make field values uniform over [0,1] and split according to class,
+  -- so we can keep equal representation throughout.
+  let (samps1, samps2, samps3) = splitIrisData $ mkSmplsUniform samps
 
-  -- Split according to class, so we can keep equal representation
-  -- throughout.
-  let samps1 = filter ((== Setosa)     . snd) samps'
-      samps2 = filter ((== Versicolor) . snd) samps'
-      samps3 = filter ((== Virginica)  . snd) samps'
-
-      -- Replace attributes record w/ feature vector.
-      samps1' = map (first attributeToVector) samps1
-      samps2' = map (first attributeToVector) samps2
-      samps3' = map (first attributeToVector) samps3
-
-      -- Replace iris type w/ one-hot vector.
-      samps1'' = map (second irisTypeToVector) samps1'
-      samps2'' = map (second irisTypeToVector) samps2'
-      samps3'' = map (second irisTypeToVector) samps3'
-
-  -- Shuffle samples.
-  shuffled1 <- shuffleM samps1''
-  shuffled2 <- shuffleM samps2''
-  shuffled3 <- shuffleM samps3''
-
-  -- Split into training/testing groups.
-  -- We calculate separate lengths, even though we expect all 3 to be
-  -- the same, just for safety's sake.
-  let len1 = length shuffled1
-      len2 = length shuffled2
-      len3 = length shuffled3
-
-      numTrn1 = len1 * 80 `div` 100
-      numTrn2 = len2 * 80 `div` 100
-      numTrn3 = len3 * 80 `div` 100
-
-      -- training data
-      trn1 = take numTrn1 shuffled1
-      trn2 = take numTrn2 shuffled2
-      trn3 = take numTrn3 shuffled3
-
-      -- test data
-      tst1 = drop numTrn1 shuffled1
-      tst2 = drop numTrn2 shuffled2
-      tst3 = drop numTrn3 shuffled3
-
-      -- Reassemble into single training/testing sets.
+  -- Shuffle samples and split into training/testing groups.
+  shuffled1 <- shuffleM samps1
+  shuffled2 <- shuffleM samps2
+  shuffled3 <- shuffleM samps3
+  let [(trn1, tst1), (trn2, tst2), (trn3, tst3)] = map splitTrnTst [shuffled1, shuffled2, shuffled3]
       trn = trn1 ++ trn2 ++ trn3
       tst = tst1 ++ tst2 ++ tst3
 

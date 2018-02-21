@@ -205,17 +205,27 @@ data Layer i o = Layer { biases :: !(R o)
 instance (KnownNat i, KnownNat o) => Binary (Layer i o)
 
 
--- Generates a value of type `Layer i o`, filled with normally
+-- Generates a value of type `Layer i o`, filled with uniformly
 -- distributed random values, tucked inside the appropriate Monad, which
 -- must be an instance of `MonadRandom`.
+--
+-- Note: normally distributed values were tried (See commented code, below.)
+--       and found not to perform as well as uniformly distributed values.
+--
+--       This could be due to my use of `logistic`, as opposed to `relu`,
+--       as my activation function; I'm not sure.
+--       (See code and comments near end of this file.)
 randLayer :: forall m i o. (MonadRandom m, KnownNat i, KnownNat o)
           => m (Layer i o)
 randLayer = do
   s1 :: Int <- getRandom
   s2 :: Int <- getRandom
-  let m = eye
-      b = randomVector s2 Gaussian
-      n = gaussianSample s1 (takeDiag m) (sym m)
+  let b = randomVector  s1 Uniform * 2 - 1  -- Need to change to Gaussian equivalent.
+      n = uniformSample s2 (-1) 1           -- Need to change to Gaussian equivalent.
+  -- PLEASE, KEEP THIS COMMENTED OUT CODE!
+  -- let m = eye
+  --     b = randomVector s2 Gaussian
+  --     n = gaussianSample s1 (takeDiag m) (sym m)
   return $ Layer b n
 
 
@@ -348,7 +358,7 @@ sgdStep rate net trn_pr = fst $ go x0 net
               -- bundle of derivatives for next step
               dWs  = tr wN #> dEdy
           in  (W w', dWs)
-    -- handle the inner layers
+    -- Handle the inner layers.
     go !x (w@(Layer wB wN) :&~ n)
         = let y          = runLayer w x
               o          = logistic y
