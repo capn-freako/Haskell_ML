@@ -84,15 +84,16 @@ splitIrisData samps' =
       samps2 = filter ((== Versicolor) . snd) samps'
       samps3 = filter ((== Virginica)  . snd) samps'
 
-      -- Replace attributes record w/ feature vector.
-      samps1' = map (first attributeToVector) samps1
-      samps2' = map (first attributeToVector) samps2
-      samps3' = map (first attributeToVector) samps3
+      -- -- Replace attributes record w/ feature vector.
+      -- samps1' = map (first attributeToVector) samps1
+      -- samps2' = map (first attributeToVector) samps2
+      -- samps3' = map (first attributeToVector) samps3
 
-      -- Replace iris type w/ one-hot vector.
-      samps1'' = map (second irisTypeToVector) samps1'
-      samps2'' = map (second irisTypeToVector) samps2'
-      samps3'' = map (second irisTypeToVector) samps3'
+      -- -- Replace iris type w/ one-hot vector.
+      -- samps1'' = map (second irisTypeToVector) samps1'
+      -- samps2'' = map (second irisTypeToVector) samps2'
+      -- samps3'' = map (second irisTypeToVector) samps3'
+      [samps1'', samps2'', samps3''] = (map . map) (attributeToVector *** irisTypeToVector) [samps1, samps2, samps3]
    in (samps1'', samps2'', samps3'')
 
 
