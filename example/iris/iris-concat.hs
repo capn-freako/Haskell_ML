@@ -20,7 +20,7 @@
 
 module Main where
 
-import           GHC.TypeLits
+-- import           GHC.TypeLits
 import           GHC.Generics (Par1(..),(:*:)(..),(:.:)(..))
 import           Control.Arrow
 import           Control.Monad
@@ -31,12 +31,13 @@ import           System.Random.Shuffle
 
 -- import ConCat.Deep     (type (--+))
 import ConCat.Deep
-import ConCat.Misc     (C3, (:*), R)
-import ConCat.Additive (Summable)
+-- import ConCat.Misc     (C3, (:*), R)
+import ConCat.Misc     (R)
+-- import ConCat.Additive (Summable)
 import ConCat.Orphans  (fstF, sndF)
 
 import Haskell_ML.FCN  (TrainEvo(..))
-import Haskell_ML.Util ( Sample(..), Attributes(..), Iris(..)
+import Haskell_ML.Util ( Sample, Attributes(..), Iris(..)
                        , readIrisData, mkSmplsUniform, splitTrnTst
                        , asciiPlot, calcMeanList
                        , randF, for
@@ -124,31 +125,31 @@ main = do
 -- infixr 1 -->
 -- type a --> b = a R -> b R
 -- trainNTimes :: (KnownNat i, KnownNat o, C3 Summable (V i R) b (V o R))
-trainNTimes :: (KnownNat i, KnownNat o, C3 Summable (V i) b (V o))
-            => Int           -- ^ Number of epochs
+-- trainNTimes :: (KnownNat i, KnownNat o, C3 Summable (V i) (V 10) (V o))
+trainNTimes :: Int           -- ^ Number of epochs
             -> Double        -- ^ learning rate
             -- -> FCNet i o     -- ^ the network to be trained
             -- -> (forall a b c. C3 Summable a b c => (a --+ b) :* (b --+ c)  ->  (a --> c))
             -- -> ((V i R) --+ V 10 R) :* (V 10 R --+ (V o R))  -- ^ pair of affine transformations representing the network
             -- -> ((V i --+ V 10) R) :* ((V 10 --+ V o) R)  -- ^ pair of affine transformations representing the network
-            -> ((V 10 --+ V o) :*: (V i --+ V 10)) R
-            -> [(V i R, V o R)]  -- ^ the training pairs
+            -> ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R
+            -> [(V 4 R, V 3 R)]  -- ^ the training pairs
             -- -> (FCNet i o, TrainEvo)
             -- -> (((V i --+ V 10) R :* (V 10 --+ V o) R), TrainEvo)
-            -> (((V 10 --+ V o) :*: (V i --+ V 10)) R, TrainEvo)
+            -> (((V 10 --+ V 3) :*: (V 4 --+ V 10)) R, TrainEvo)
 trainNTimes = trainNTimes' [] []
 
 -- trainNTimes' :: (KnownNat i, KnownNat o)
-trainNTimes' :: (KnownNat i, KnownNat o, C3 Summable (V i) (V 10) (V o))
-             => [Double]                    -- accuracies
+-- trainNTimes' :: (KnownNat i, KnownNat o, C3 Summable (V i) (V 10) (V o))
+trainNTimes' :: [Double]                    -- accuracies
              -> [([[Double]], [[Double]])]  -- weight/bias differences
              -> Int
              -> Double
              -- -> ((V i --+ V 10) R :* (V 10 --+ V o) R)
-             -> ((V 10 --+ V o) :*: (V i --+ V 10)) R
-             -> [(V i R, V o R)]
+             -> ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R
+             -> [(V 4 R, V 3 R)]
              -- -> (((V i --+ V 10) R :* (V 10 --+ V o) R), TrainEvo)
-             -> (((V 10 --+ V o) :*: (V i --+ V 10)) R, TrainEvo)
+             -> (((V 10 --+ V 3) :*: (V 4 --+ V 10)) R, TrainEvo)
 trainNTimes' accs diffs 0 _    net _   = (net, TrainEvo accs diffs)
 trainNTimes' accs diffs n rate net prs = trainNTimes' (accs ++ [acc]) (diffs ++ [diff]) (n-1) rate net' prs
   -- where net'  = trainNet rate net prs
@@ -160,12 +161,12 @@ trainNTimes' accs diffs n rate net prs = trainNTimes' (accs ++ [acc]) (diffs ++ 
         diff  = ( zipWith (zipWith (-)) (getWeights net') (getWeights net)
                 , zipWith (zipWith (-)) (getBiases  net') (getBiases  net) )
 
-        getWeights :: ((V 10 --+ V o) :*: (V i --+ V 10)) R -> [[Double]]
+        getWeights :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R -> [[Double]]
         getWeights (w1 :*: w2) = foo w2 ++ foo w1
           -- where foo = concat . map (reverse . tail . reverse . VS.toList . fst) . VS.toList
           where foo = map (reverse . tail . reverse . VS.toList . fstF) . VS.toList . unComp1
 
-        getBiases :: ((V 10 --+ V o) :*: (V i --+ V 10)) R -> [[Double]]
+        getBiases :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R -> [[Double]]
         getBiases (w1 :*: w2) = bar w2 : [bar w1]
           where bar = map (unPar1 . sndF) . VS.toList . unComp1
 
@@ -201,15 +202,17 @@ irisTypeToVector = \case
 --
 --   - a list of results vectors, and
 --   - a list of reference vectors.
-classificationAccuracy :: (KnownNat n) => [V n Double] -> [V n Double] -> Double
+-- classificationAccuracy :: (KnownNat n) => [V (n + 1) Double] -> [V (n + 1) Double] -> Double
+classificationAccuracy :: [V 3 Double] -> [V 3 Double] -> Double
 classificationAccuracy us vs = calcMeanList $ cmpr us vs
 
-  where cmpr :: (KnownNat n) => [V n Double] -> [V n Double] -> [Double]
+  -- where cmpr :: (KnownNat n) => [V (n + 1) Double] -> [V (n + 1) Double] -> [Double]
+  where cmpr :: [V 3 Double] -> [V 3 Double] -> [Double]
         cmpr xs ys = for (zipWith maxComp xs ys) $ \case
                        True  -> 1.0
                        False -> 0.0
 
-        maxComp :: (KnownNat n) => V n Double -> V n Double -> Bool
+        -- maxComp :: (KnownNat n) => V (n + 1) Double -> V (n + 1) Double -> Bool
+        maxComp :: V 3 Double -> V 3 Double -> Bool
         maxComp u v = VS.maxIndex u == VS.maxIndex v
-
 

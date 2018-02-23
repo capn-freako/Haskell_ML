@@ -77,6 +77,7 @@ executable iris-concat
   hs-source-dirs:      example/iris
   main-is:             iris-concat.hs
   build-depends:       base >= 4.7 && < 5
+                     , ghc-prim
                      , haskell-ml
                      , hmatrix
                      , random-shuffle
