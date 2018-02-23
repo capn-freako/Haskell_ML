@@ -2,6 +2,17 @@ flags: {}
 extra-package-dbs: []
 packages:
 - .
-extra-deps: []
+- location: ../concat
+  subdirs:
+  - classes
+  - plugin
+  - examples
+  - inline
+  - satisfy
+  extra-dep: true
+extra-deps:
+  - pointed-5.0.1 ## instances for GHC.Generics
+  - keys-3.12     ## instances for GHC.Generics
+  - ghc-typelits-natnormalise-0.5.8
 resolver: lts-9.20
 

@@ -28,17 +28,19 @@ module Haskell_ML.Util
   , attributeToVector, irisTypeToVector
   , classificationAccuracy, printVector, printVecPair, mkSmplsUniform
   , asciiPlot, calcMeanList
-  , for
+  , for, randF
   ) where
 
 import           Control.Applicative
 import           Control.Arrow
+import           Control.Monad.Trans.State.Lazy
 import           Data.List
 import qualified Data.Text as T
 import           Data.Attoparsec.Text hiding (take)
 import           Data.Singletons.TypeLits
 import           Numeric.LinearAlgebra.Data (maxIndex, toList)
 import           Numeric.LinearAlgebra.Static
+import           System.Random
 import           Text.Printf
 
 
@@ -83,16 +85,6 @@ splitIrisData samps' =
   let samps1 = filter ((== Setosa)     . snd) samps'
       samps2 = filter ((== Versicolor) . snd) samps'
       samps3 = filter ((== Virginica)  . snd) samps'
-
-      -- -- Replace attributes record w/ feature vector.
-      -- samps1' = map (first attributeToVector) samps1
-      -- samps2' = map (first attributeToVector) samps2
-      -- samps3' = map (first attributeToVector) samps3
-
-      -- -- Replace iris type w/ one-hot vector.
-      -- samps1'' = map (second irisTypeToVector) samps1'
-      -- samps2'' = map (second irisTypeToVector) samps2'
-      -- samps3'' = map (second irisTypeToVector) samps3'
       [samps1'', samps2'', samps3''] = (map . map) (attributeToVector *** irisTypeToVector) [samps1, samps2, samps3]
    in (samps1'', samps2'', samps3'')
 
@@ -222,6 +214,11 @@ asciiPlot xs = unlines $
             x_min      = minimum xs
             x_max      = maximum xs
             x_range    = x_max - x_min
+
+
+-- | Create an arbitrary functor filled with different random values.
+randF :: (Traversable f, Applicative f, Random a) => Int -> f a
+randF = evalState (sequenceA $ pure $ state random) . mkStdGen
 
 
 -----------------------------------------------------------------------
