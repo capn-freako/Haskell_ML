@@ -20,20 +20,16 @@
 
 module Main where
 
--- import           GHC.TypeLits
 import           GHC.Generics (Par1(..),(:*:)(..),(:.:)(..))
 import           Control.Arrow
 import           Control.Monad
 import           Data.List
+import           Data.Maybe   (fromMaybe)
 import qualified Data.Vector.Sized as VS
--- import           Numeric.LinearAlgebra.Static
 import           System.Random.Shuffle
 
--- import ConCat.Deep     (type (--+))
 import ConCat.Deep
--- import ConCat.Misc     (C3, (:*), R)
 import ConCat.Misc     (R)
--- import ConCat.Additive (Summable)
 import ConCat.Orphans  (fstF, sndF)
 
 import Haskell_ML.FCN  (TrainEvo(..))
@@ -44,7 +40,6 @@ import Haskell_ML.Util ( Sample, Attributes(..), Iris(..)
                        )
 
 type V = VS.Vector
--- type R = Double
 
 dataFileName :: String
 dataFileName = "data/iris.csv"
@@ -75,14 +70,10 @@ main = do
   putStrLn "Done."
 
   -- Create 2-layer network, using `ConCat.Deep`.
-  -- let n    = randF
-  let rate = 0.1
-  -- let (n', TrainEvo{..}) = trainNTimes 60 rate n trnShuffled
   let (n', TrainEvo{..}) = trainNTimes 60
-                                       rate
-                                       (randF 1 :: (((V 10 :*: Par1) --* V 3) :*: ((V 4 :*: Par1) --* V 10)) R)
+                                       0.1
+                                       (randF 1)
                                        trnShuffled
-      -- res = runNet n' $ map fst tstShuffled
       res   = map (lr2 n' . fst) tstShuffled
       ref = map snd tstShuffled
   putStrLn $ "Test accuracy: " ++ show (classificationAccuracy res ref)
@@ -104,58 +95,24 @@ main = do
 
 -- | Train a network on several epochs of the training data, keeping
 -- track of accuracy and weight/bias changes per layer, after each.
---
--- -- | Linear map representation ("matrix")
--- infixr 1 --*
--- type a --* b = (a :--* b) R
---
--- -- | Generalized matrix
--- infixr 1 :--*
--- type (p :--* q) u = q (p u)
---
--- type Bump h = h :*: Par1
---
--- bump :: Num s => a s -> Bump a s
--- bump a = a :*: Par1 1
---
--- -- | Affine map representation
--- infixr 1 --+
--- type a --+ b = Bump a --* b
---
--- infixr 1 -->
--- type a --> b = a R -> b R
--- trainNTimes :: (KnownNat i, KnownNat o, C3 Summable (V i R) b (V o R))
--- trainNTimes :: (KnownNat i, KnownNat o, C3 Summable (V i) (V 10) (V o))
-trainNTimes :: Int           -- ^ Number of epochs
-            -> Double        -- ^ learning rate
-            -- -> FCNet i o     -- ^ the network to be trained
-            -- -> (forall a b c. C3 Summable a b c => (a --+ b) :* (b --+ c)  ->  (a --> c))
-            -- -> ((V i R) --+ V 10 R) :* (V 10 R --+ (V o R))  -- ^ pair of affine transformations representing the network
-            -- -> ((V i --+ V 10) R) :* ((V 10 --+ V o) R)  -- ^ pair of affine transformations representing the network
+trainNTimes :: Int                                    -- ^ Number of epochs
+            -> Double                                 -- ^ learning rate
             -> ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R
-            -> [(V 4 R, V 3 R)]  -- ^ the training pairs
-            -- -> (FCNet i o, TrainEvo)
-            -- -> (((V i --+ V 10) R :* (V 10 --+ V o) R), TrainEvo)
+            -> [(V 4 R, V 3 R)]                       -- ^ the training pairs
             -> (((V 10 --+ V 3) :*: (V 4 --+ V 10)) R, TrainEvo)
 trainNTimes = trainNTimes' [] []
 
--- trainNTimes' :: (KnownNat i, KnownNat o)
--- trainNTimes' :: (KnownNat i, KnownNat o, C3 Summable (V i) (V 10) (V o))
 trainNTimes' :: [Double]                    -- accuracies
              -> [([[Double]], [[Double]])]  -- weight/bias differences
              -> Int
              -> Double
-             -- -> ((V i --+ V 10) R :* (V 10 --+ V o) R)
              -> ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R
              -> [(V 4 R, V 3 R)]
-             -- -> (((V i --+ V 10) R :* (V 10 --+ V o) R), TrainEvo)
              -> (((V 10 --+ V 3) :*: (V 4 --+ V 10)) R, TrainEvo)
 trainNTimes' accs diffs 0 _    net _   = (net, TrainEvo accs diffs)
 trainNTimes' accs diffs n rate net prs = trainNTimes' (accs ++ [acc]) (diffs ++ [diff]) (n-1) rate net' prs
-  -- where net'  = trainNet rate net prs
   where net'  = steps rate lr2 prs net
         acc   = classificationAccuracy res ref
-        -- res   = runNet net' $ map fst prs
         res   = map (lr2 net' . fst) prs
         ref   = map snd prs
         diff  = ( zipWith (zipWith (-)) (getWeights net') (getWeights net)
@@ -163,16 +120,11 @@ trainNTimes' accs diffs n rate net prs = trainNTimes' (accs ++ [acc]) (diffs ++ 
 
         getWeights :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R -> [[Double]]
         getWeights (w1 :*: w2) = foo w2 ++ foo w1
-          -- where foo = concat . map (reverse . tail . reverse . VS.toList . fst) . VS.toList
-          where foo = map (reverse . tail . reverse . VS.toList . fstF) . VS.toList . unComp1
+          where foo = map (init . VS.toList . fstF) . VS.toList . unComp1
 
         getBiases :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R -> [[Double]]
         getBiases (w1 :*: w2) = bar w2 : [bar w1]
           where bar = map (unPar1 . sndF) . VS.toList . unComp1
-
--- -- Multiple SGD steps, from one parameter estimation to another
--- steps :: (C3 Summable p a b, Additive1 p, Functor f, Foldable f, Additive s, Num s)
---       => s -> (p s -> a s -> b s) -> f (a s :* b s) -> Unop (p s)
 
 
 -- | Split Iris dataset into classes and apply some preconditioning.
@@ -187,32 +139,29 @@ splitIrisData samps' =
 
 -- | Convert a value of type `Attributes` to a value of type `V` 4.
 attributeToVector :: Attributes -> V 4 R
-attributeToVector Attributes{..} = maybe (VS.replicate 0) id $ VS.fromList [sepLen, sepWidth, pedLen, pedWidth]
+attributeToVector Attributes{..} = fromMaybe (VS.replicate 0) $ VS.fromList [sepLen, sepWidth, pedLen, pedWidth]
 
 
 -- | Convert a value of type `Iris` to a one-hot vector value of type `R` 3.
 irisTypeToVector :: Iris -> V 3 R
 irisTypeToVector = \case
-  Setosa     -> maybe (VS.replicate 0) id $ VS.fromList [1,0,0]
-  Versicolor -> maybe (VS.replicate 0) id $ VS.fromList [0,1,0]
-  Virginica  -> maybe (VS.replicate 0) id $ VS.fromList [0,0,1]
+  Setosa     -> fromMaybe (VS.replicate 0) $ VS.fromList [1,0,0]
+  Versicolor -> fromMaybe (VS.replicate 0) $ VS.fromList [0,1,0]
+  Virginica  -> fromMaybe (VS.replicate 0) $ VS.fromList [0,0,1]
 
 
 -- | Calculate the classification accuracy, given:
 --
 --   - a list of results vectors, and
 --   - a list of reference vectors.
--- classificationAccuracy :: (KnownNat n) => [V (n + 1) Double] -> [V (n + 1) Double] -> Double
 classificationAccuracy :: [V 3 Double] -> [V 3 Double] -> Double
 classificationAccuracy us vs = calcMeanList $ cmpr us vs
 
-  -- where cmpr :: (KnownNat n) => [V (n + 1) Double] -> [V (n + 1) Double] -> [Double]
   where cmpr :: [V 3 Double] -> [V 3 Double] -> [Double]
         cmpr xs ys = for (zipWith maxComp xs ys) $ \case
                        True  -> 1.0
                        False -> 0.0
 
-        -- maxComp :: (KnownNat n) => V (n + 1) Double -> V (n + 1) Double -> Bool
         maxComp :: V 3 Double -> V 3 Double -> Bool
         maxComp u v = VS.maxIndex u == VS.maxIndex v
 
