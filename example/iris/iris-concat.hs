@@ -31,6 +31,8 @@ import           System.Random.Shuffle
 import ConCat.Deep
 import ConCat.Misc     (R)
 import ConCat.Orphans  (fstF, sndF)
+import ConCat.Rebox    () -- necessary for reboxing rules to fire
+import ConCat.AltCat   ()
 
 import Haskell_ML.FCN  (TrainEvo(..))
 import Haskell_ML.Util ( Sample, Attributes(..), Iris(..)
