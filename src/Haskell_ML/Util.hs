@@ -219,6 +219,7 @@ asciiPlot xs = unlines $
 -- | Create an arbitrary functor filled with different random values.
 randF :: (Traversable f, Applicative f, Random a) => Int -> f a
 randF = evalState (sequenceA $ pure $ state random) . mkStdGen
+{-# INLINE randF #-}
 
 
 -----------------------------------------------------------------------

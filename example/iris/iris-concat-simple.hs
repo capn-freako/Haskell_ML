@@ -30,6 +30,9 @@ main :: IO ()
 main = do
   -- Use 2-layer network, from `ConCat.Deep`.
   let net  = randF 1 :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R
+      {-# INLINE net #-}
       net' = steps 0.1 lr2 [(VS.replicate 0.0 :: V 4 R, VS.replicate 0.0 :: V 3 R)] net
+      {-# INLINE net' #-}
   putStrLn $ show net'
+
 
