@@ -20,10 +20,13 @@
 
 module Main where
 
+import Prelude hiding (zipWith, zip)
+
 import           GHC.Generics (Par1(..),(:*:)(..),(:.:)(..))
 import           Control.Arrow
 import           Control.Monad
-import           Data.List
+import           Data.Key     (Zip(..))
+import           Data.List    hiding (zipWith, zip)
 import           Data.Maybe   (fromMaybe)
 import qualified Data.Vector.Sized as VS
 import           System.Random.Shuffle
@@ -48,6 +51,9 @@ dataFileName = "data/iris.csv"
 
 main :: IO ()
 main = do
+  putStrLn "Learning rate?"
+  rate <- readLn
+
   -- Read in the Iris data set. It contains an equal number of samples
   -- for all 3 classes of iris.
   putStrLn "Reading in data..."
@@ -72,12 +78,21 @@ main = do
   putStrLn "Done."
 
   -- Create 2-layer network, using `ConCat.Deep`.
+  let net = fmap (\x -> 2 * x - 1) $ randF 1
+  putStrLn $ "Initial weights: " ++ show (getWeights net)
+  putStrLn $ "Initial biases: " ++ show (getBiases net)
+
+  -- let (n', TrainEvo{..}) = trainNTimes 60
   let (n', TrainEvo{..}) = trainNTimes 60
-                                       0.1
-                                       (randF 1)
+                                       rate
+                                       net
                                        trnShuffled
-      res   = map (lr2 n' . fst) tstShuffled
+      res = map (lr2 n' . fst) tstShuffled
       ref = map snd tstShuffled
+
+  putStrLn $ "Final weights: " ++ show (getWeights n')
+  putStrLn $ "Final biases: " ++ show (getBiases n')
+
   putStrLn $ "Test accuracy: " ++ show (classificationAccuracy res ref)
 
   -- Plot the evolution of the training accuracy.
@@ -113,20 +128,21 @@ trainNTimes' :: [Double]                    -- accuracies
              -> (((V 10 --+ V 3) :*: (V 4 --+ V 10)) R, TrainEvo)
 trainNTimes' accs diffs 0 _    net _   = (net, TrainEvo accs diffs)
 trainNTimes' accs diffs n rate net prs = trainNTimes' (accs ++ [acc]) (diffs ++ [diff]) (n-1) rate net' prs
-  where net'  = steps rate lr2 prs net
+  where net'  = steps lr2 rate prs net
+  -- where net'  = zipWith (-) net $ steps lr2 rate prs net
         acc   = classificationAccuracy res ref
         res   = map (lr2 net' . fst) prs
         ref   = map snd prs
         diff  = ( zipWith (zipWith (-)) (getWeights net') (getWeights net)
                 , zipWith (zipWith (-)) (getBiases  net') (getBiases  net) )
 
-        getWeights :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R -> [[Double]]
-        getWeights (w1 :*: w2) = foo w2 ++ foo w1
-          where foo = map (init . VS.toList . fstF) . VS.toList . unComp1
+getWeights :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R -> [[Double]]
+getWeights (w1 :*: w2) = foo w2 : [foo w1]
+  where foo = concat . map (VS.toList . fstF) . VS.toList . unComp1
 
-        getBiases :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R -> [[Double]]
-        getBiases (w1 :*: w2) = bar w2 : [bar w1]
-          where bar = map (unPar1 . sndF) . VS.toList . unComp1
+getBiases :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R -> [[Double]]
+getBiases (w1 :*: w2) = bar w2 : [bar w1]
+  where bar = map (unPar1 . sndF) . VS.toList . unComp1
 
 
 -- | Split Iris dataset into classes and apply some preconditioning.

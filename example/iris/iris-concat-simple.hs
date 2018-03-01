@@ -7,6 +7,8 @@
 --
 -- Note: this code started out as a direct copy of iris-concat.hs.
 
+-- -- To trigger a recompile, for trace debugging.
+
 {-# OPTIONS_GHC -Wall #-}
 
 {-# LANGUAGE DataKinds #-}
@@ -34,5 +36,4 @@ main = do
       net' = steps 0.1 lr2 [(VS.replicate 0.0 :: V 4 R, VS.replicate 0.0 :: V 3 R)] net
       {-# INLINE net' #-}
   putStrLn $ show net'
-
 
