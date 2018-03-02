@@ -43,6 +43,8 @@ library
   hs-source-dirs:      src
   exposed-modules:     Haskell_ML.FCN
                      , Haskell_ML.Util
+                     , Haskell_ML.Classify.Classifiable
+                     , Haskell_ML.Classify.Iris
   build-depends:       base >= 4.7 && < 5
                      , attoparsec
                      , binary
@@ -52,7 +54,7 @@ library
                      , singletons
                      , transformers
                      , text
-                     , vector
+                     , vector-sized
   default-language:    Haskell2010
   ghc-options:         -O2
                        -fexcess-precision

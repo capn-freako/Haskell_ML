@@ -43,114 +43,30 @@ import           Numeric.LinearAlgebra.Static
 import           System.Random
 import           Text.Printf
 
-
--- | The 3 classes of iris are represented by the 3 constructors of this
--- type.
-data Iris = Setosa
-          | Versicolor
-          | Virginica
-  deriving (Show, Read, Eq, Ord, Enum)
-
-
--- | Data type representing the set of attributes for a sample in the
--- Iris dataset.
-data Attributes = Attributes
-  { sepLen   :: Double
-  , sepWidth :: Double
-  , pedLen   :: Double
-  , pedWidth :: Double
-  } deriving (Show, Read, Eq, Ord)
-
-
--- | A single sample in the dataset is a pair of a list of attributes
--- and a classification.
-type Sample = (Attributes, Iris)
-
-
--- | Read in an Iris dataset from the given file name.
-readIrisData :: String -> IO [Sample]
-readIrisData fname = do
-    ls <- T.lines . T.pack <$> readFile fname
-    return $ f <$> ls
-
-  where
-    f l = case parseOnly sampleParser l of
-            Left msg -> error msg
-            Right x  -> x
-
-
--- | Split Iris dataset into classes and apply some preconditioning.
-splitIrisData :: [Sample] -> ([(R 4, R 3)],[(R 4, R 3)],[(R 4, R 3)])
-splitIrisData samps' =
-  let samps1 = filter ((== Setosa)     . snd) samps'
-      samps2 = filter ((== Versicolor) . snd) samps'
-      samps3 = filter ((== Virginica)  . snd) samps'
-      [samps1'', samps2'', samps3''] = (map . map) (attributeToVector *** irisTypeToVector) [samps1, samps2, samps3]
-   in (samps1'', samps2'', samps3'')
+import           Haskell_ML.Classify.Classifiable
 
 
 -- | Split a list of samples into training/testing sets.
-splitTrnTst :: [a] -> ([a],[a])
-splitTrnTst xs =
-  let n   = length xs * 80 `div` 100
-      trn = take n xs
-      tst = drop n xs
+--
+-- The Finite given should be the percentage of samples desired for
+-- training.
+splitTrnTst :: Finite 101 -> [a] -> ([a],[a])
+splitTrnTst _ [] = ([],[])
+splitTrnTst n xs =
+  let n'   = length xs * n `div` 100
+      trn  = take n' xs
+      tst  = drop n' xs
    in (trn, tst)
 
 
--- | Rescale all feature values, to fall in [0,1].
-mkSmplsUniform :: [Sample] -> [Sample]
-mkSmplsUniform samps = map (first $ scaleAtt . offsetAtt) samps
-  where scaleAtt :: Attributes -> Attributes
-        scaleAtt Attributes{..} = Attributes (sls * sepLen) (sws * sepWidth) (pls * pedLen) (pws * pedWidth)
-
-        offsetAtt :: Attributes -> Attributes
-        offsetAtt Attributes{..} = Attributes (sepLen - slo) (sepWidth - swo) (pedLen - plo) (pedWidth - pwo)
-
-        slo = minFldVal sepLen   samps
-        swo = minFldVal sepWidth samps
-        plo = minFldVal pedLen   samps
-        pwo = minFldVal pedWidth samps
-
-        sls = 1.0 / (maxFldVal sepLen   samps - slo)
-        sws = 1.0 / (maxFldVal sepWidth samps - swo)
-        pls = 1.0 / (maxFldVal pedLen   samps - plo)
-        pws = 1.0 / (maxFldVal pedWidth samps - pwo)
+-- | Convert vector of Doubles from sized vector to hmatrix format.
+toR :: V n a -> R n
+toR = vector . VS.toList
 
 
--- | Finds the minimum value, for a particular `Attributes` field, in a
--- list of samples.
-minFldVal :: (Attributes -> Double) -> [Sample] -> Double
-minFldVal = overSamps minimum
-
-
--- | Finds the maximum value, for a particular `Attributes` field, in a
--- list of samples.
-maxFldVal :: (Attributes -> Double) -> [Sample] -> Double
-maxFldVal = overSamps maximum
-
-
--- | Applies a reduction to an `Attributes` field in a list of `Sample`s.
-overSamps :: ([Double] -> Double) -> (Attributes -> Double) -> [Sample] -> Double
-overSamps f fldAcc = f . fldFromSamps fldAcc
-
-
--- | Extracts the values of a `Attributes` field from a list of `Sample`s.
-fldFromSamps :: (Attributes -> Double) -> [Sample] -> [Double]
-fldFromSamps fldAcc = map (fldAcc . fst)
-
-
--- | Convert a value of type `Attributes` to a value of type `R` 4.
-attributeToVector :: Attributes -> R 4
-attributeToVector Attributes{..} = vector [sepLen, sepWidth, pedLen, pedWidth]
-
-
--- | Convert a value of type `Iris` to a one-hot vector value of type `R` 3.
-irisTypeToVector :: Iris -> R 3
-irisTypeToVector = \case
-  Setosa     -> vector [1,0,0]
-  Versicolor -> vector [0,1,0]
-  Virginica  -> vector [0,0,1]
+-- | Convert vector of Doubles from hmatrix to sized vector format.
+toV :: R n -> V n a
+toV = VS.fromList . toList . unwrap
 
 
 -- | Calculate the classification accuracy, given:
@@ -220,28 +136,6 @@ asciiPlot xs = unlines $
 randF :: (Traversable f, Applicative f, Random a) => Int -> f a
 randF = evalState (sequenceA $ pure $ state random) . mkStdGen
 {-# INLINE randF #-}
-
-
------------------------------------------------------------------------
--- All following functions are for internal library use only!
--- They are not exported through the API.
------------------------------------------------------------------------
-
-
-sampleParser :: Parser Sample
-sampleParser = f <$> (double <* char ',')
-                 <*> (double <* char ',')
-                 <*> (double <* char ',')
-                 <*> (double <* char ',')
-                 <*> irisParser
-  where
-
-    f sl sw pl pw i = (Attributes sl sw pl pw, i)
-
-    irisParser :: Parser Iris
-    irisParser =     string "Iris-setosa"     *> return Setosa
-                 <|> string "Iris-versicolor" *> return Versicolor
-                 <|> string "Iris-virginica"  *> return Virginica
 
 
 -- | Convenience function (= flip map).
