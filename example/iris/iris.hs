@@ -14,12 +14,17 @@
 
 module Main where
 
+import           Control.Arrow (first, (***))
 import           Control.Monad
 import           Data.List
+import qualified Data.Vector.Sized as VS
+import           Numeric.LinearAlgebra.Static (R)
 import           System.Random.Shuffle
 
 import Haskell_ML.FCN
 import Haskell_ML.Util
+import Haskell_ML.Classify.Classifiable
+import Haskell_ML.Classify.Iris
 
 dataFileName :: String
 dataFileName = "data/iris.csv"
@@ -29,23 +34,35 @@ main = do
   -- Read in the Iris data set. It contains an equal number of samples
   -- for all 3 classes of iris.
   putStrLn "Reading in data..."
-  samps    <- readIrisData dataFileName
+  (samps :: [Sample Iris]) <- readClassifiableData dataFileName
 
   -- Make field values uniform over [0,1] and split according to class,
   -- so we can keep equal representation throughout.
-  let (samps1, samps2, samps3) = splitIrisData $ mkSmplsUniform samps
+  let sampsV :: V 3 [(R 4, R 3)]
+      sampsV = VS.map ( map (toR *** toR)
+                      . uncurry zip
+                      . (first mkAttrsUniform)
+                      . unzip
+                      ) $ splitClassifiableData samps
 
-  -- Shuffle samples and split into training/testing groups.
-  shuffled1 <- shuffleM samps1
-  shuffled2 <- shuffleM samps2
-  shuffled3 <- shuffleM samps3
-  let [(trn1, tst1), (trn2, tst2), (trn3, tst3)] = map splitTrnTst [shuffled1, shuffled2, shuffled3]
-      trn = trn1 ++ trn2 ++ trn3
-      tst = tst1 ++ tst2 ++ tst3
+  -- Shuffle samples.
+  -- shuffled1 <- shuffleM samps1
+  -- shuffled2 <- shuffleM samps2
+  -- shuffled3 <- shuffleM samps3
+
+  -- Split into training/testing groups.
+  let splitV :: V 3 ([(R 4, R 3)],[(R 4, R 3)])
+      splitV = VS.map (splitTrnTst 80) sampsV
 
   -- Reshuffle.
-  trnShuffled <- shuffleM trn
-  tstShuffled <- shuffleM tst
+  -- trnShuffled <- shuffleM trn
+  -- tstShuffled <- shuffleM tst
+
+  let (trnShuffled, tstShuffled) = VS.foldl (uncurry (***) . ((++) *** (++))) ([],[]) splitV
+  -- (***)                             :: a b c -> a b' c' -> a (b, b') (c, c')
+  -- (++)                              :: [a] -> [a] -> [a]
+  -- ((++) *** (++))                   :: ([t], [u]) -> ([t] -> [t], [u] -> [u])
+  -- (uncurry (***) . ((++) *** (++))) :: ([t], [u]) -> ([t], [u]) -> ([t], [u])
 
   putStrLn "Done."
 

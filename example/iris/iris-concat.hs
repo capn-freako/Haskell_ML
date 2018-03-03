@@ -27,9 +27,8 @@ import           Control.Arrow
 import           Control.Monad
 import           Data.Key     (Zip(..))
 import           Data.List    hiding (zipWith, zip)
-import           Data.Maybe   (fromMaybe)
 import qualified Data.Vector.Sized as VS
-import           System.Random.Shuffle
+-- import           System.Random.Shuffle
 
 import ConCat.Deep
 import ConCat.Misc     (R)
@@ -38,13 +37,9 @@ import ConCat.Rebox    ()  -- Necessary for reboxing rules to fire
 import ConCat.AltCat   ()  -- Necessary, but I've forgotten why.
 
 import Haskell_ML.FCN  (TrainEvo(..))
-import Haskell_ML.Util ( Sample, Attributes(..), Iris(..)
-                       , readIrisData, mkSmplsUniform, splitTrnTst
-                       , asciiPlot, calcMeanList
-                       , randF, for
-                       )
-
-type V = VS.Vector
+import Haskell_ML.Util
+import Haskell_ML.Classify.Classifiable
+import Haskell_ML.Classify.Iris
 
 dataFileName :: String
 dataFileName = "data/iris.csv"
@@ -57,41 +52,37 @@ main = do
   -- Read in the Iris data set. It contains an equal number of samples
   -- for all 3 classes of iris.
   putStrLn "Reading in data..."
-  samps    <- readIrisData dataFileName
+  (samps :: [Sample Iris]) <- readClassifiableData dataFileName
 
   -- Make field values uniform over [0,1] and split according to class,
   -- so we can keep equal representation throughout.
-  let (samps1, samps2, samps3) = splitIrisData $ mkSmplsUniform samps
+  let sampsV :: V 3 [(AttrVec Iris, TypeVec Iris)]
+      sampsV = VS.map (uncurry zip . (first mkAttrsUniform) . unzip) $ splitClassifiableData samps
 
   -- Shuffle samples and split into training/testing groups.
-  shuffled1 <- shuffleM samps1
-  shuffled2 <- shuffleM samps2
-  shuffled3 <- shuffleM samps3
-  let [(trn1, tst1), (trn2, tst2), (trn3, tst3)] = map splitTrnTst [shuffled1, shuffled2, shuffled3]
-      trn = trn1 ++ trn2 ++ trn3
-      tst = tst1 ++ tst2 ++ tst3
+  -- shuffled1 <- shuffleM samps1
+  -- shuffled2 <- shuffleM samps2
+  -- shuffled3 <- shuffleM samps3
+
+  -- Split into training/testing groups.
+  let splitV :: V 3 ([(AttrVec Iris, TypeVec Iris)],[(AttrVec Iris, TypeVec Iris)])
+      splitV = VS.map (splitTrnTst 80) sampsV
 
   -- Reshuffle.
-  trnShuffled <- shuffleM trn
-  tstShuffled <- shuffleM tst
+  -- trnShuffled <- shuffleM trn
+  -- tstShuffled <- shuffleM tst
+
+  let (trnShuffled, tstShuffled) = VS.foldl (uncurry (***) . ((++) *** (++))) ([],[]) splitV
 
   putStrLn "Done."
 
   -- Create 2-layer network, using `ConCat.Deep`.
   let net = fmap (\x -> 2 * x - 1) $ randF 1
-  putStrLn $ "Initial weights: " ++ show (getWeights net)
-  putStrLn $ "Initial biases: " ++ show (getBiases net)
-
-  -- let (n', TrainEvo{..}) = trainNTimes 60
-  let (n', TrainEvo{..}) = trainNTimes 60
+      (n', TrainEvo{..}) = trainNTimes 60
                                        rate
                                        net
                                        trnShuffled
-      res = map (lr2 n' . fst) tstShuffled
-      ref = map snd tstShuffled
-
-  putStrLn $ "Final weights: " ++ show (getWeights n')
-  putStrLn $ "Final biases: " ++ show (getBiases n')
+      (res, ref) = unzip $ map (toR . lr2 n' *** toR) tstShuffled
 
   putStrLn $ "Test accuracy: " ++ show (classificationAccuracy res ref)
 
@@ -129,10 +120,8 @@ trainNTimes' :: [Double]                    -- accuracies
 trainNTimes' accs diffs 0 _    net _   = (net, TrainEvo accs diffs)
 trainNTimes' accs diffs n rate net prs = trainNTimes' (accs ++ [acc]) (diffs ++ [diff]) (n-1) rate net' prs
   where net'  = steps lr2 rate prs net
-  -- where net'  = zipWith (-) net $ steps lr2 rate prs net
         acc   = classificationAccuracy res ref
-        res   = map (lr2 net' . fst) prs
-        ref   = map snd prs
+        (res, ref) = unzip $ map (toR . lr2 net' *** toR) prs
         diff  = ( zipWith (zipWith (-)) (getWeights net') (getWeights net)
                 , zipWith (zipWith (-)) (getBiases  net') (getBiases  net) )
 
@@ -143,43 +132,4 @@ getWeights (w1 :*: w2) = foo w2 : [foo w1]
 getBiases :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R -> [[Double]]
 getBiases (w1 :*: w2) = bar w2 : [bar w1]
   where bar = map (unPar1 . sndF) . VS.toList . unComp1
-
-
--- | Split Iris dataset into classes and apply some preconditioning.
-splitIrisData :: [Sample] -> ([(V 4 R, V 3 R)],[(V 4 R, V 3 R)],[(V 4 R, V 3 R)])
-splitIrisData samps' =
-  let samps1 = filter ((== Setosa)     . snd) samps'
-      samps2 = filter ((== Versicolor) . snd) samps'
-      samps3 = filter ((== Virginica)  . snd) samps'
-      [samps1'', samps2'', samps3''] = (map . map) (attributeToVector *** irisTypeToVector) [samps1, samps2, samps3]
-   in (samps1'', samps2'', samps3'')
-
-
--- | Convert a value of type `Attributes` to a value of type `V` 4.
-attributeToVector :: Attributes -> V 4 R
-attributeToVector Attributes{..} = fromMaybe (VS.replicate 0) $ VS.fromList [sepLen, sepWidth, pedLen, pedWidth]
-
-
--- | Convert a value of type `Iris` to a one-hot vector value of type `R` 3.
-irisTypeToVector :: Iris -> V 3 R
-irisTypeToVector = \case
-  Setosa     -> fromMaybe (VS.replicate 0) $ VS.fromList [1,0,0]
-  Versicolor -> fromMaybe (VS.replicate 0) $ VS.fromList [0,1,0]
-  Virginica  -> fromMaybe (VS.replicate 0) $ VS.fromList [0,0,1]
-
-
--- | Calculate the classification accuracy, given:
---
---   - a list of results vectors, and
---   - a list of reference vectors.
-classificationAccuracy :: [V 3 Double] -> [V 3 Double] -> Double
-classificationAccuracy us vs = calcMeanList $ cmpr us vs
-
-  where cmpr :: [V 3 Double] -> [V 3 Double] -> [Double]
-        cmpr xs ys = for (zipWith maxComp xs ys) $ \case
-                       True  -> 1.0
-                       False -> 0.0
-
-        maxComp :: V 3 Double -> V 3 Double -> Bool
-        maxComp u v = VS.maxIndex u == VS.maxIndex v
 

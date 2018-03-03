@@ -7,7 +7,11 @@
 --
 -- Note: This code was originally culled from Util.hs.
 
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeFamilies #-}
 
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
@@ -21,9 +25,12 @@ Maintainer  : capn.freako@gmail.com
 Stability   : experimental
 Portability : ?
 -}
-module Haskell_ML.Classify.Iris
-  ( Iris(..), IrisAttr(..)
-  ) where
+module Haskell_ML.Classify.Iris where
+
+import           Control.Applicative
+import           Data.Attoparsec.Text hiding (take)
+import qualified Data.Vector.Sized as VS
+import           Data.Maybe                  (fromMaybe)
 
 import Haskell_ML.Classify.Classifiable
 
@@ -36,26 +43,23 @@ data Iris = Setosa
   deriving (Show, Read, Eq, Ord, Enum)
 
 
--- | Data type representing the set of attributes for a sample in the
--- Iris dataset.
-data IrisAttr = IrisAttr
-  { sepLen   :: Double
-  , sepWidth :: Double
-  , pedLen   :: Double
-  , pedWidth :: Double
-  } deriving (Show, Read, Eq, Ord)
-
-
 instance Classifiable Iris where
   type Card Iris = 3
   type NAtt Iris = 4
-  type Attr Iris = IrisAttr
-  attrToVec IrisAttr{..} = VS.fromList [sepLen, sepWidth, pedLen, pedWidth]
+  data Attr Iris = IrisAttr
+    { sepLen   :: Double
+    , sepWidth :: Double
+    , pedLen   :: Double
+    , pedWidth :: Double
+    } deriving (Show, Read, Eq, Ord)
+  attrToVec IrisAttr{..} = fromMaybe (error "Iris.attrToVec bombed!") $
+                           VS.fromList [sepLen, sepWidth, pedLen, pedWidth]
   typeToVec = \case
-    Setosa     -> VS.fromList [1,0,0]
-    Versicolor -> VS.fromList [0,1,0]
-    Virginica  -> VS.fromList [0,0,1]
-  filtPreds = VS.fromList [ (== Setosa)
+    Setosa     -> fromMaybe (error "Iris.typeToVec bombed!") $ VS.fromList [1,0,0]
+    Versicolor -> fromMaybe (error "Iris.typeToVec bombed!") $ VS.fromList [0,1,0]
+    Virginica  -> fromMaybe (error "Iris.typeToVec bombed!") $ VS.fromList [0,0,1]
+  filtPreds = fromMaybe (error "Iris.filtPreds bombed!") $
+              VS.fromList [ (== Setosa)
                           , (== Versicolor)
                           , (== Virginica)
                           ]
@@ -65,7 +69,7 @@ instance Classifiable Iris where
                    <*> (double <* char ',')
                    <*> irisParser
     where
-      f sl sw pl pw i = (Attributes sl sw pl pw, i)
+      f sl sw pl pw i = (IrisAttr sl sw pl pw, i)
       irisParser :: Parser Iris
       irisParser =     string "Iris-setosa"     *> return Setosa
                    <|> string "Iris-versicolor" *> return Versicolor

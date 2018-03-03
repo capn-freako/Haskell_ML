@@ -13,6 +13,7 @@
 
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -28,39 +29,39 @@ Maintainer  : capn.freako@gmail.com
 Stability   : experimental
 Portability : ?
 -}
-module Haskell_ML.Classify.Classifiable
-  ( Classifiable
-  ) where
+module Haskell_ML.Classify.Classifiable where
 
 import           GHC.TypeLits
+import           Control.Arrow               ((***), (&&&))
 import           Data.Attoparsec.Text hiding (take)
+import           Data.Foldable               (foldl')
 import qualified Data.Text         as T
 import qualified Data.Vector.Sized as VS
 
 type V = VS.Vector
 
+
+-- | Class of types amenable to classification, via machine learning.
 class Classifiable t where
   type Card t :: Nat
   type NAtt t :: Nat
-  type Attr t :: *
+  data Attr t :: *
   type Sample  t :: *
   type Sample  t = (Attr t, t)
-  -- data Sample :: * -> *
-  -- data Sample t = (Attr t, t)
   type AttrVec t :: *
   type AttrVec t = V (NAtt t) Double
   type TypeVec t :: *
   type TypeVec t = V (Card t) Double
   filtPreds    :: V (Card t) (t -> Bool)
-  sampleParser :: Parser (Sample t)
-  attrToVec    :: Attr t -> AttrVec t
+  sampleParser :: Parser (Attr t, t)
+  attrToVec    :: Attr t -> V (NAtt t) Double
   typeToVec    :: t      -> TypeVec t
 
 
 -- | Read a list of samples from the named file.
 --
 -- Note: Can throw error!
-readClassifiableData :: Classifiable t => String -> IO [Sample t]
+readClassifiableData :: Classifiable t => String -> IO [(Attr t, t)]
 readClassifiableData fname = do
     ls <- T.lines . T.pack <$> readFile fname
     return $ f <$> ls
@@ -71,22 +72,20 @@ readClassifiableData fname = do
 
 
 -- | Split a list of samples into classes and convert to vector form.
-splitClassifiableData :: Classifiable t => [Sample t] -> V (Card t) [(AttrVec t, TypeVec t)]
+splitClassifiableData :: (Classifiable t, KnownNat (NAtt t)) => [(Attr t, t)] -> V (Card t) [(V (NAtt t) Double, TypeVec t)]
 splitClassifiableData samps =
-  VS.map (\pred -> map (attrToVec *** typeToVec) . filter (pred . snd) samps) filtPreds
+  VS.map (\q -> map (attrToVec *** typeToVec) $ filter (q . snd) samps) filtPreds
 
 
 -- | Rescale all attribute values to fall in [0,1].
-mkAttrsUniform :: Classifiable t => [AttrVec t] -> [AttrVec t]
+mkAttrsUniform :: KnownNat n => [V n Double] -> [V n Double]
 mkAttrsUniform [] = []
 mkAttrsUniform vs = map (VS.zipWith (*) scales . flip (VS.zipWith (-)) mins) vs
   where (mins, maxs) = getAttrRanges vs
-        scales       = VS.zipWith (\ min max -> if max == min then 0 else 1 / (max - min)) mins maxs
+        scales       = VS.zipWith (\ mn mx -> if mx == mn then 0 else 1 / (mx - mn)) mins maxs
 
 -- | Find the extremes in a list of attribute vectors.
-getAttrRanges :: Classifiable t => [AttrVec t] -> (AttrVec t, AttrVec t)
--- getAttrRanges vs = (f min Infinity, f max (-Infinity))
---   where f g x = foldl' (VS.zipWith g) (VS.replicate x) vs
-getAttrRanges = f min Infinity &&& f max (-Infinity)
+getAttrRanges :: KnownNat n => [V n Double] -> (V n Double, V n Double)
+getAttrRanges = f min 1e10 &&& f max (-1e10)
   where f g x = foldl' (VS.zipWith g) (VS.replicate x)
 

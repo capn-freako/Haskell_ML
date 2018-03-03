@@ -22,22 +22,14 @@ Maintainer  : capn.freako@gmail.com
 Stability   : experimental
 Portability : ?
 -}
-module Haskell_ML.Util
-  ( Iris(..), Attributes(..), Sample
-  , readIrisData, splitIrisData, splitTrnTst
-  , attributeToVector, irisTypeToVector
-  , classificationAccuracy, printVector, printVecPair, mkSmplsUniform
-  , asciiPlot, calcMeanList
-  , for, randF
-  ) where
+module Haskell_ML.Util where
 
-import           Control.Applicative
-import           Control.Arrow
 import           Control.Monad.Trans.State.Lazy
+import           Data.Finite
 import           Data.List
-import qualified Data.Text as T
-import           Data.Attoparsec.Text hiding (take)
 import           Data.Singletons.TypeLits
+import qualified Data.Vector.Sized as VS
+-- import           Foreign.Storable
 import           Numeric.LinearAlgebra.Data (maxIndex, toList)
 import           Numeric.LinearAlgebra.Static
 import           System.Random
@@ -53,20 +45,20 @@ import           Haskell_ML.Classify.Classifiable
 splitTrnTst :: Finite 101 -> [a] -> ([a],[a])
 splitTrnTst _ [] = ([],[])
 splitTrnTst n xs =
-  let n'   = length xs * n `div` 100
+  let n'   = length xs * ((fromInteger . getFinite) n) `div` 100
       trn  = take n' xs
       tst  = drop n' xs
    in (trn, tst)
 
 
 -- | Convert vector of Doubles from sized vector to hmatrix format.
-toR :: V n a -> R n
+toR :: KnownNat n => V n Double -> R n
 toR = vector . VS.toList
 
 
 -- | Convert vector of Doubles from hmatrix to sized vector format.
-toV :: R n -> V n a
-toV = VS.fromList . toList . unwrap
+-- toV :: (KnownNat n, Foreign.Storable.Storable a) => R n -> V n a
+-- toV = fromMaybe (error "toV bombed!") . VS.fromList . toList . unwrap
 
 
 -- | Calculate the classification accuracy, given:
