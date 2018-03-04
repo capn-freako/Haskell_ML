@@ -65,10 +65,12 @@ toR = vector . VS.toList
 --
 --   - a list of results vectors, and
 --   - a list of reference vectors.
-classificationAccuracy :: (KnownNat n) => [R n] -> [R n] -> Double
+-- classificationAccuracy :: (KnownNat n) => [R n] -> [R n] -> Double
+classificationAccuracy :: (Foldable f, KnownNat n) => f (R n) -> f (R n) -> Double
 classificationAccuracy us vs = calcMeanList $ cmpr us vs
 
-  where cmpr :: (KnownNat n) => [R n] -> [R n] -> [Double]
+  -- where cmpr :: (KnownNat n) => [R n] -> [R n] -> [Double]
+  where cmpr :: (Foldable f, KnownNat n) => f (R n) -> f (R n) -> [Double]
         cmpr xs ys = for (zipWith maxComp xs ys) $ \case
                        True  -> 1.0
                        False -> 0.0
@@ -78,7 +80,8 @@ classificationAccuracy us vs = calcMeanList $ cmpr us vs
 
 
 -- | Calculate the mean value of a list.
-calcMeanList :: (Fractional a) => [a] -> a
+-- calcMeanList :: (Fractional a) => [a] -> a
+calcMeanList :: (Foldable f, Fractional a) => f a -> a
 calcMeanList = uncurry (/) . foldr (\e (s,c) -> (e+s,c+1)) (0,0)
 
 
@@ -131,6 +134,8 @@ randF = evalState (sequenceA $ pure $ state random) . mkStdGen
 
 
 -- | Convenience function (= flip map).
-for :: [a] -> (a -> b) -> [b]
-for = flip map
+-- for :: [a] -> (a -> b) -> [b]
+-- for = flip map
+for :: Functor f => f a -> (a -> b) -> f b
+for = flip fmap
 

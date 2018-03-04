@@ -38,6 +38,7 @@ import ConCat.AltCat   ()  -- Necessary, but I've forgotten why.
 
 import Haskell_ML.FCN  (TrainEvo(..))
 import Haskell_ML.Util
+import Haskell_ML.ConCat
 import Haskell_ML.Classify.Classifiable
 import Haskell_ML.Classify.Iris
 
@@ -56,8 +57,8 @@ main = do
 
   -- Make field values uniform over [0,1] and split according to class,
   -- so we can keep equal representation throughout.
-  let sampsV :: V 3 [(AttrVec Iris, TypeVec Iris)]
-      sampsV = VS.map (uncurry zip . (first mkAttrsUniform) . unzip) $ splitClassifiableData samps
+  -- let sampsV :: V 3 [(AttrVec Iris, TypeVec Iris)]
+  --     sampsV = VS.map (uncurry zip . (first mkAttrsUniform) . unzip) $ splitClassifiableData samps
 
   -- Shuffle samples and split into training/testing groups.
   -- shuffled1 <- shuffleM samps1
@@ -65,8 +66,13 @@ main = do
   -- shuffled3 <- shuffleM samps3
 
   -- Split into training/testing groups.
-  let splitV :: V 3 ([(AttrVec Iris, TypeVec Iris)],[(AttrVec Iris, TypeVec Iris)])
-      splitV = VS.map (splitTrnTst 80) sampsV
+  -- let splitV :: V 3 ([(AttrVec Iris, TypeVec Iris)],[(AttrVec Iris, TypeVec Iris)])
+  --     splitV = VS.map (splitTrnTst 80) sampsV
+  let splitV = VS.map ( splitTrnTst 80
+                      . uncurry zip
+                      . (first mkAttrsUniform)
+                      . unzip
+                      ) $ splitClassifiableData samps
 
   -- Reshuffle.
   -- trnShuffled <- shuffleM trn
@@ -99,37 +105,4 @@ main = do
   forM_ biases $ \ (i, bs) -> do
     putStrLn $ "Average variance in layer " ++ show i ++ " biases:"
     putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x)) bs
-
-
--- | Train a network on several epochs of the training data, keeping
--- track of accuracy and weight/bias changes per layer, after each.
-trainNTimes :: Int                                    -- ^ Number of epochs
-            -> Double                                 -- ^ learning rate
-            -> ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R
-            -> [(V 4 R, V 3 R)]                       -- ^ the training pairs
-            -> (((V 10 --+ V 3) :*: (V 4 --+ V 10)) R, TrainEvo)
-trainNTimes = trainNTimes' [] []
-
-trainNTimes' :: [Double]                    -- accuracies
-             -> [([[Double]], [[Double]])]  -- weight/bias differences
-             -> Int
-             -> Double
-             -> ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R
-             -> [(V 4 R, V 3 R)]
-             -> (((V 10 --+ V 3) :*: (V 4 --+ V 10)) R, TrainEvo)
-trainNTimes' accs diffs 0 _    net _   = (net, TrainEvo accs diffs)
-trainNTimes' accs diffs n rate net prs = trainNTimes' (accs ++ [acc]) (diffs ++ [diff]) (n-1) rate net' prs
-  where net'  = steps lr2 rate prs net
-        acc   = classificationAccuracy res ref
-        (res, ref) = unzip $ map (toR . lr2 net' *** toR) prs
-        diff  = ( zipWith (zipWith (-)) (getWeights net') (getWeights net)
-                , zipWith (zipWith (-)) (getBiases  net') (getBiases  net) )
-
-getWeights :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R -> [[Double]]
-getWeights (w1 :*: w2) = foo w2 : [foo w1]
-  where foo = concat . map (VS.toList . fstF) . VS.toList . unComp1
-
-getBiases :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R -> [[Double]]
-getBiases (w1 :*: w2) = bar w2 : [bar w1]
-  where bar = map (unPar1 . sndF) . VS.toList . unComp1
 
