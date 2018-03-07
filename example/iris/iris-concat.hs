@@ -22,37 +22,29 @@ module Main where
 
 import Prelude hiding (zipWith, zip)
 
--- import           GHC.Generics (Par1(..),(:*:)(..),(:.:)(..))
 import           GHC.Generics ((:*:)(..))
 import           Control.Arrow
 import           Control.Monad
 import           Data.Key     (Zip(..))
 import           Data.List    hiding (zipWith, zip)
 import qualified Data.Vector.Sized as VS
--- import           System.Random.Shuffle
+import           System.Random.Shuffle
 
 import ConCat.Deep
 import ConCat.Misc     (R)
--- import ConCat.Orphans  (fstF, sndF)
 import ConCat.Rebox    ()  -- Necessary for reboxing rules to fire
 import ConCat.AltCat   ()  -- Necessary, but I've forgotten why.
 
--- import Haskell_ML.FCN  (TrainEvo(..))
 import Haskell_ML.Util
 import Haskell_ML.Classify.Classifiable
 import Haskell_ML.Classify.Iris
 
+-- Define the network and its parameter type.
 type PType = ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R
+net        = lr2  -- Defined in ConCat.Deep.
 
 dataFileName :: String
 dataFileName = "data/iris.csv"
-
--- Parameter type definitions
--- newtype Affine2 a b c = Affine2 { unAffine2 :: (b --+ c) :*: (a --+ b) }
-
--- instance HasLayers Affine2 where
---   getWeights (Affine2 (g :*: f)) = [concat (getWeights t) | t <- (f, g)]
---   getBiases  (Affine2 (g :*: f)) = [concat (getBiases t)  | t <- (f, g)]
 
 main :: IO ()
 main = do
@@ -64,49 +56,33 @@ main = do
   putStrLn "Reading in data..."
   (samps :: [Sample Iris]) <- readClassifiableData dataFileName
 
-  -- Make field values uniform over [0,1] and split according to class,
-  -- so we can keep equal representation throughout.
-  -- let sampsV :: V 3 [(AttrVec Iris, TypeVec Iris)]
-  --     sampsV = VS.map (uncurry zip . (first mkAttrsUniform) . unzip) $ splitClassifiableData samps
+  -- Shuffle samples.
+  shuffled <- shuffleM samps
 
-  -- Shuffle samples and split into training/testing groups.
-  -- shuffled1 <- shuffleM samps1
-  -- shuffled2 <- shuffleM samps2
-  -- shuffled3 <- shuffleM samps3
-
-  -- Split into training/testing groups.
-  -- let splitV :: V 3 ([(AttrVec Iris, TypeVec Iris)],[(AttrVec Iris, TypeVec Iris)])
-  --     splitV = VS.map (splitTrnTst 80) sampsV
+  -- Perform the following operations, in order:
+  -- - Split samples according to class.
+  -- - Within each class, make attribute values uniform over [0,1].
+  -- - Split each class into training/testing sets.
   let splitV = VS.map ( splitTrnTst 80
                       . uncurry zip
                       . (first mkAttrsUniform)
                       . unzip
-                      ) $ splitClassifiableData samps
+                      ) $ splitClassifiableData shuffled
 
-  -- Reshuffle.
-  -- trnShuffled <- shuffleM trn
-  -- tstShuffled <- shuffleM tst
-
-  let (trnShuffled, tstShuffled) = VS.foldl (uncurry (***) . ((++) *** (++))) ([],[]) splitV
+  -- Gather up the training/testing sets into two lists and reshuffle.
+  -- let (trn, tst) = VS.foldl mappend ([],[]) splitV
+  let (trn, tst) = foldMap id splitV
+  trnShuffled <- shuffleM trn
+  tstShuffled <- shuffleM tst
 
   putStrLn "Done."
 
   -- Create 2-layer network, using `ConCat.Deep`.
-  -- let ps  = fmap (\x -> 2 * x - 1) $ (randF 1 :: ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R)
-  let ps  = fmap (\x -> 2 * x - 1) $ (randF 1 :: PType)
-      net = lr2
-      -- (n', TrainEvo{..}) = trainNTimes 60
-      ps' = trainNTimes 60 rate net ps trnShuffled
+  let ps         = fmap (\x -> 2 * x - 1) $ (randF 1 :: PType)
+      ps'        = trainNTimes 60 rate net ps trnShuffled
       (res, ref) = unzip $ map (first (net (last ps'))) tstShuffled
-      accs = map (\p -> uncurry classificationAccuracy $ unzip $ map (first (net p)) trnShuffled) ps'
-      -- diffs = zipWith (uncurry (***) . ((-) *** (-))) (tail ps') ps' :: [PType]
-      diffs = zipWith ((<*>) . fmap (-)) (tail ps') ps' :: [PType]
-
-  -- acc        = classificationAccuracy res ref
-  -- -- (res, ref) = unzip $ fmap ((toR . net ps') *** toR) prs
-  -- (res, ref) = unzip $ fmap (first (net ps')) prs
-  -- diff       = ( zipWith (zipWith (-)) (getWeights ps') (getWeights ps)
-  --              , zipWith (zipWith (-)) (getBiases  ps') (getBiases  ps) )
+      accs       = map (\p -> uncurry classificationAccuracy $ unzip $ map (first (net p)) trnShuffled) ps'
+      diffs      = zipWith ((<*>) . fmap (-)) (tail ps') ps' :: [PType]
 
   putStrLn $ "Test accuracy: " ++ show (classificationAccuracy res ref)
 
@@ -115,8 +91,6 @@ main = do
   putStrLn $ asciiPlot accs
 
   -- Plot the evolution of the weights and biases.
-  -- let weights = zip [1::Int,2..] $ (transpose . map fst) diffs
-  --     biases  = zip [1::Int,2..] $ (transpose . map snd) diffs
   let weights = zip [1::Int,2..] $ (transpose . map getWeights) diffs
       biases  = zip [1::Int,2..] $ (transpose . map getBiases)  diffs
   forM_ weights $ \ (i, ws) -> do
@@ -125,14 +99,4 @@ main = do
   forM_ biases $ \ (i, bs) -> do
     putStrLn $ "Average variance in layer " ++ show i ++ " biases:"
     putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x)) bs
-
--- -- | Data type for holding training evolution data.
--- data TrainEvo a = TrainEvo
---   { accs  :: [a]              -- ^ training accuracies
---   , diffs :: [([[a]],[[a]])]  -- ^ differences of weights/biases, by layer
---   }
-
--- instance Monoid (TrainEvo a) where
---   mempty      = TrainEvo [] []
---   mappend x y = TrainEvo (accs x ++ accs y) (diffs x ++ diffs y)
 
