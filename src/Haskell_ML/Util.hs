@@ -9,6 +9,7 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds #-}
 
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -24,13 +25,16 @@ Portability : ?
 -}
 module Haskell_ML.Util where
 
+import Prelude hiding (zipWith)
+
 import           Control.Monad.Trans.State.Lazy
 import           Data.Finite
-import           Data.List
+import           Data.Key
+import           Data.List                       hiding (zipWith)
+import           Data.Ord                               (comparing)
 import           Data.Singletons.TypeLits
 import qualified Data.Vector.Sized as VS
--- import           Foreign.Storable
-import           Numeric.LinearAlgebra.Data (maxIndex, toList)
+import           Numeric.LinearAlgebra.Data             (toList)
 import           Numeric.LinearAlgebra.Static
 import           System.Random
 import           Text.Printf
@@ -45,7 +49,7 @@ import           Haskell_ML.Classify.Classifiable
 splitTrnTst :: Finite 101 -> [a] -> ([a],[a])
 splitTrnTst _ [] = ([],[])
 splitTrnTst n xs =
-  let n'   = length xs * ((fromInteger . getFinite) n) `div` 100
+  let n'   = length xs * (fromInteger . getFinite) n `div` 100
       trn  = take n' xs
       tst  = drop n' xs
    in (trn, tst)
@@ -56,31 +60,25 @@ toR :: KnownNat n => V n Double -> R n
 toR = vector . VS.toList
 
 
--- | Convert vector of Doubles from hmatrix to sized vector format.
--- toV :: (KnownNat n, Foreign.Storable.Storable a) => R n -> V n a
--- toV = fromMaybe (error "toV bombed!") . VS.fromList . toList . unwrap
-
-
 -- | Calculate the classification accuracy, given:
 --
---   - a list of results vectors, and
---   - a list of reference vectors.
--- classificationAccuracy :: (KnownNat n) => [R n] -> [R n] -> Double
-classificationAccuracy :: (Foldable f, KnownNat n) => f (R n) -> f (R n) -> Double
+--   - a functor of results vectors, and
+--   - a functor of reference vectors.
+classificationAccuracy :: (Foldable f, Keyed f, Eq (Key f), Foldable g, Zip g, Ord a)
+                       => g (f a)  -- ^ Functor of result vectors.
+                       -> g (f a)  -- ^ Functor of reference vectors.
+                       -> Double
 classificationAccuracy us vs = calcMeanList $ cmpr us vs
-
-  -- where cmpr :: (KnownNat n) => [R n] -> [R n] -> [Double]
-  where cmpr :: (Foldable f, KnownNat n) => f (R n) -> f (R n) -> [Double]
+  where cmpr :: (Foldable f, Keyed f, Eq (Key f), Zip g, Ord a)
+             => g (f a) -> g (f a) -> g Double
         cmpr xs ys = for (zipWith maxComp xs ys) $ \case
                        True  -> 1.0
                        False -> 0.0
-
-        maxComp :: (KnownNat n) => R n -> R n -> Bool
-        maxComp u v = maxIndex (extract u) == maxIndex (extract v)
+        maxComp :: (Foldable f, Keyed f, Eq (Key f), Ord a) => f a -> f a -> Bool
+        maxComp u v = maxIndex u == maxIndex v
 
 
 -- | Calculate the mean value of a list.
--- calcMeanList :: (Fractional a) => [a] -> a
 calcMeanList :: (Foldable f, Fractional a) => f a -> a
 calcMeanList = uncurry (/) . foldr (\e (s,c) -> (e+s,c+1)) (0,0)
 
@@ -134,8 +132,11 @@ randF = evalState (sequenceA $ pure $ state random) . mkStdGen
 
 
 -- | Convenience function (= flip map).
--- for :: [a] -> (a -> b) -> [b]
--- for = flip map
 for :: Functor f => f a -> (a -> b) -> f b
 for = flip fmap
+
+
+-- | Find the index of the maximum value in a keyed functor.
+maxIndex :: (Foldable f, Keyed f, Ord a) => f a -> Key f
+maxIndex = fst . maximumBy (comparing snd) . keyed
 

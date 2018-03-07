@@ -22,7 +22,7 @@ import           Numeric.LinearAlgebra.Static (R)
 import           System.Random.Shuffle
 
 import Haskell_ML.FCN
-import Haskell_ML.Util
+import Haskell_ML.Util                   hiding (classificationAccuracy)
 import Haskell_ML.Classify.Classifiable
 import Haskell_ML.Classify.Iris
 

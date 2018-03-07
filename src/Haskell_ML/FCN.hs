@@ -37,7 +37,7 @@ module Haskell_ML.FCN
   ( FCNet(), TrainEvo(..)
   , randNet, runNet, netTest, hiddenStruct
   , getWeights, getBiases
-  , trainNTimes
+  , trainNTimes, classificationAccuracy
   ) where
 
 import Control.Monad.Random
@@ -45,11 +45,11 @@ import Data.Binary
 import Data.List
 import Data.Singletons.Prelude
 import Data.Singletons.TypeLits
-import Data.Vector.Storable (toList)
+import Data.Vector.Storable (toList, maxIndex)
 import GHC.Generics (Generic)
 import Numeric.LinearAlgebra.Static
 
-import Haskell_ML.Util
+import Haskell_ML.Util  hiding (classificationAccuracy, maxIndex)
 
 
 -- | A fully connected, multi-layer network with fixed input/output
@@ -80,7 +80,6 @@ data TrainEvo = TrainEvo
   , diffs :: [([[Double]],[[Double]])]  -- ^ differences of weights/biases, by layer
   }
 
-
 -- | Train a network on several epochs of the training data, keeping
 -- track of accuracy and weight/bias changes per layer, after each.
 trainNTimes :: (KnownNat i, KnownNat o)
@@ -103,6 +102,21 @@ trainNTimes' accs diffs n rate net prs = trainNTimes' (accs ++ [acc]) (diffs ++ 
         ref   = map snd prs
         diff  = ( zipWith (zipWith (-)) (getWeights net') (getWeights net)
                 , zipWith (zipWith (-)) (getBiases  net') (getBiases  net) )
+
+
+-- | Calculate the classification accuracy, given:
+--
+--   - a list of results vectors, and
+--   - a list of reference vectors.
+classificationAccuracy :: (KnownNat n) => [R n] -> [R n] -> Double
+classificationAccuracy us vs = calcMeanList $ cmpr us vs
+  where cmpr :: (KnownNat n) => [R n] -> [R n] -> [Double]
+        cmpr xs ys = for (zipWith maxComp xs ys) $ \case
+                       True  -> 1.0
+                       False -> 0.0
+
+        maxComp :: (KnownNat n) => R n -> R n -> Bool
+        maxComp u v = maxIndex (extract u) == maxIndex (extract v)
 
 
 -- | Run a network on a list of inputs.

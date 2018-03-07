@@ -43,7 +43,6 @@ library
   hs-source-dirs:      src
   exposed-modules:     Haskell_ML.FCN
                      , Haskell_ML.Util
-                     , Haskell_ML.ConCat
                      , Haskell_ML.Classify.Classifiable
                      , Haskell_ML.Classify.Iris
   build-depends:       base >= 4.7 && < 5
@@ -51,11 +50,13 @@ library
                      , binary
                      , finite-typelits
                      , hmatrix
+                     , keys
                      , MonadRandom
                      , random
                      , singletons
                      , transformers
                      , text
+                     , TypeCompose
                      , vector
                      , vector-sized
                      , concat-classes
