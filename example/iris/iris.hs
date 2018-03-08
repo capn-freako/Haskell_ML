@@ -16,9 +16,9 @@ module Main where
 
 import           Control.Arrow (first, (***))
 import           Control.Monad
+import           Data.Foldable (fold)
 import           Data.List
 import qualified Data.Vector.Sized as VS
-import           Numeric.LinearAlgebra.Static (R)
 import           System.Random.Shuffle
 
 import Haskell_ML.FCN
@@ -36,33 +36,24 @@ main = do
   putStrLn "Reading in data..."
   (samps :: [Sample Iris]) <- readClassifiableData dataFileName
 
-  -- Make field values uniform over [0,1] and split according to class,
-  -- so we can keep equal representation throughout.
-  let sampsV :: V 3 [(R 4, R 3)]
-      sampsV = VS.map ( map (toR *** toR)
-                      . uncurry zip
-                      . (first mkAttrsUniform)
-                      . unzip
-                      ) $ splitClassifiableData samps
-
   -- Shuffle samples.
-  -- shuffled1 <- shuffleM samps1
-  -- shuffled2 <- shuffleM samps2
-  -- shuffled3 <- shuffleM samps3
+  shuffled <- shuffleM samps
 
-  -- Split into training/testing groups.
-  let splitV :: V 3 ([(R 4, R 3)],[(R 4, R 3)])
-      splitV = VS.map (splitTrnTst 80) sampsV
+  -- Perform the following operations, in order:
+  -- - Split samples according to class.
+  -- - Within each class, make attribute values uniform over [0,1].
+  -- - Split each class into training/testing sets.
+  let splitV = VS.map ( splitTrnTst 80
+                      . map (toR *** toR)
+                      . uncurry zip
+                      . first mkAttrsUniform
+                      . unzip
+                      ) $ splitClassifiableData shuffled
 
-  -- Reshuffle.
-  -- trnShuffled <- shuffleM trn
-  -- tstShuffled <- shuffleM tst
-
-  let (trnShuffled, tstShuffled) = VS.foldl (uncurry (***) . ((++) *** (++))) ([],[]) splitV
-  -- (***)                             :: a b c -> a b' c' -> a (b, b') (c, c')
-  -- (++)                              :: [a] -> [a] -> [a]
-  -- ((++) *** (++))                   :: ([t], [u]) -> ([t] -> [t], [u] -> [u])
-  -- (uncurry (***) . ((++) *** (++))) :: ([t], [u]) -> ([t], [u]) -> ([t], [u])
+  -- Gather up the training/testing sets into two lists and reshuffle.
+  let (trn, tst) = fold splitV
+  trnShuffled <- shuffleM trn
+  tstShuffled <- shuffleM tst
 
   putStrLn "Done."
 
@@ -74,11 +65,14 @@ main = do
   putStrLn " - one (closest to the input layer) with 2 output nodes, and"
   putStrLn " - one with 4 output nodes."
   hs <- readLn
-  n  <- randNet hs
+  net  <- randNet hs
   putStrLn "Great! Now, enter your desired learning rate."
   putStrLn "(Should be a decimal floating point value in (0,1)."
   rate <- readLn
-  let (n', TrainEvo{..}) = trainNTimes 60 rate n trnShuffled
+  putStrLn "And, finally, the number of epochs you'd like to run."
+  putStrLn "(Should be an integer between 120 and 10,000.)"
+  epochs <- readLn
+  let (n', TrainEvo{..}) = trainNTimes epochs rate net trnShuffled
       res = runNet n' $ map fst tstShuffled
       ref = map snd tstShuffled
   putStrLn $ "Test accuracy: " ++ show (classificationAccuracy res ref)

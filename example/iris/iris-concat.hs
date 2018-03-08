@@ -22,6 +22,8 @@ module Main where
 
 import Prelude hiding (zipWith, zip)
 
+import qualified GHC.Generics  -- To avoid coercion hole errors from ConCat.Plugin.
+
 import           GHC.Generics ((:*:)(..))
 import           Control.Arrow
 import           Control.Monad
@@ -41,8 +43,10 @@ import Haskell_ML.Classify.Classifiable
 import Haskell_ML.Classify.Iris
 
 -- Define the network and its parameter type.
-type PType = ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R
-net        = lr2  -- Defined in ConCat.Deep.
+-- type PType = ((V 10 --+ V 3) :*: (V 4 --+ V 10)) R
+-- net        = lr2  -- Defined in ConCat.Deep.
+type PType = ((V 5 --+ V 3) :*: (V 10 --+ V 5) :*: (V 4 --+ V 10)) R
+net        = lr3'  -- Defined in ConCat.Deep.
 
 dataFileName :: String
 dataFileName = "data/iris.csv"
@@ -51,6 +55,8 @@ main :: IO ()
 main = do
   putStrLn "Learning rate?"
   rate <- readLn
+  putStrLn "Number of epochs?"
+  epochs <- readLn
 
   -- Read in the Iris data set. It contains an equal number of samples
   -- for all 3 classes of iris.
@@ -71,8 +77,6 @@ main = do
                       ) $ splitClassifiableData shuffled
 
   -- Gather up the training/testing sets into two lists and reshuffle.
-  -- let (trn, tst) = VS.foldl mappend ([],[]) splitV
-  -- let (trn, tst) = foldMap id splitV
   let (trn, tst) = fold splitV
   trnShuffled <- shuffleM trn
   tstShuffled <- shuffleM tst
@@ -81,7 +85,7 @@ main = do
 
   -- Create 2-layer network, using `ConCat.Deep`.
   let ps         = (\x -> 2 * x - 1) <$> (randF 1 :: PType)
-      ps'        = trainNTimes 60 rate net ps trnShuffled
+      ps'        = trainNTimes epochs rate net ps trnShuffled
       (res, ref) = unzip $ map (first (net (last ps'))) tstShuffled
       accs       = map (\p -> uncurry classificationAccuracy $ unzip $ map (first (net p)) trnShuffled) ps'
       diffs      = zipWith ((<*>) . fmap (-)) (tail ps') ps' :: [PType]

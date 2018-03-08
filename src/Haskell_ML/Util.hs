@@ -104,10 +104,10 @@ printVecPair (u, v) = "( " ++ printVector u ++ ", " ++ printVector v ++ " )"
 
 -- | Plot a list of Doubles to an ASCII terminal.
 asciiPlot :: [Double] -> String
-asciiPlot xs = unlines $
+asciiPlot ys = unlines $
   zipWith (++)
     [ "        "
-    , printf " %6.4f " x_max
+    , printf " %6.1e " x_max
     , "        "
     , "        "
     , "        "
@@ -117,22 +117,28 @@ asciiPlot xs = unlines $
     , "        "
     , "        "
     , "        "
-    , printf " %6.4f " x_min
+    , printf " %6.1e " x_min
     , "        "
     ] $
     (:) "^" $ transpose (
     (:) "|||||||||||" $
-    for (take 60 xs) $ \x ->
+    for xs $ \x ->
       valToStr $ (x - x_min) * 10 / x_range
-    ) ++ ["|" ++ replicate 60 '_' ++ ">"]
-
+    ) ++ ["|0" ++ concat [replicate 16 '_' ++ printf "%4d" (n * length ys `div` 3) | n <- [1..3]] ++ ">"]
       where valToStr  :: Double -> String
             valToStr x = let i = round (10 - x)
                           in replicate i ' ' ++ "*" ++ replicate (10 - i) ' '
             x_min      = minimum xs
             x_max      = maximum xs
             x_range    = x_max - x_min
+            xs         = takeEvery (length ys `div` 60) ys
 
+
+-- | Return every Nth element of a list.
+takeEvery :: Int -> [a] -> [a]
+takeEvery n xs = case drop (n-1) xs of
+                   (y:ys) -> y : takeEvery n ys
+                   []     -> []
 
 -- | Create an arbitrary functor filled with different random values.
 randF :: (Traversable f, Applicative f, Random a) => Int -> f a
@@ -163,12 +169,12 @@ class HasLayers p where
   getBiases  :: p s -> [[s]]
 
 instance (HasLayers f, HasLayers g) => HasLayers (g :*: f) where
-  getWeights (g :*: f) = [ (concat . getWeights) f, (concat . getWeights) g ]
-  getBiases  (g :*: f) = [ (concat . getBiases)  f, (concat . getBiases)  g ]
+  getWeights (g :*: f) = getWeights f ++ getWeights g
+  getBiases  (g :*: f) = getBiases  f ++ getBiases  g
 
 instance (Foldable a, Foldable b) => HasLayers (a --+ b) where
-  getWeights (Comp1 gf) = (map (toList          . fstF) . toList) gf
-  getBiases  (Comp1 gf) = (map ((: []) . unPar1 . sndF) . toList) gf
+  getWeights (Comp1 gf) = [(concat . map (toList          . fstF) . toList) gf]
+  getBiases  (Comp1 gf) = [(concat . map ((: []) . unPar1 . sndF) . toList) gf]
 
 -- instance (HasLayers f, Foldable g) => HasLayers (g :.: f) where
 --   getWeights (Comp1 g) = reverse $ foldl' (\ws -> (: ws) . concat . getWeights) [] g
