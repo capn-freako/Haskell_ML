@@ -25,6 +25,7 @@ import Prelude hiding (zipWith, zip)
 import           GHC.Generics ((:*:)(..))
 import           Control.Arrow
 import           Control.Monad
+import           Data.Foldable (fold)
 import           Data.Key     (Zip(..))
 import           Data.List    hiding (zipWith, zip)
 import qualified Data.Vector.Sized as VS
@@ -65,20 +66,21 @@ main = do
   -- - Split each class into training/testing sets.
   let splitV = VS.map ( splitTrnTst 80
                       . uncurry zip
-                      . (first mkAttrsUniform)
+                      . first mkAttrsUniform
                       . unzip
                       ) $ splitClassifiableData shuffled
 
   -- Gather up the training/testing sets into two lists and reshuffle.
   -- let (trn, tst) = VS.foldl mappend ([],[]) splitV
-  let (trn, tst) = foldMap id splitV
+  -- let (trn, tst) = foldMap id splitV
+  let (trn, tst) = fold splitV
   trnShuffled <- shuffleM trn
   tstShuffled <- shuffleM tst
 
   putStrLn "Done."
 
   -- Create 2-layer network, using `ConCat.Deep`.
-  let ps         = fmap (\x -> 2 * x - 1) $ (randF 1 :: PType)
+  let ps         = (\x -> 2 * x - 1) <$> (randF 1 :: PType)
       ps'        = trainNTimes 60 rate net ps trnShuffled
       (res, ref) = unzip $ map (first (net (last ps'))) tstShuffled
       accs       = map (\p -> uncurry classificationAccuracy $ unzip $ map (first (net p)) trnShuffled) ps'

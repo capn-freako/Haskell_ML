@@ -49,7 +49,7 @@ import Data.Vector.Storable (toList, maxIndex)
 import GHC.Generics (Generic)
 import Numeric.LinearAlgebra.Static
 
-import Haskell_ML.Util  hiding (classificationAccuracy, maxIndex)
+import Haskell_ML.Util  hiding (classificationAccuracy, maxIndex, getWeights, getBiases)
 
 
 -- | A fully connected, multi-layer network with fixed input/output

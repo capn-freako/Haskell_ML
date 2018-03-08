@@ -10,9 +10,12 @@
 
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 {-|
 Module      : Haskell_ML.Util
@@ -27,17 +30,23 @@ module Haskell_ML.Util where
 
 import Prelude hiding (zipWith)
 
+import GHC.Generics (Par1(..),(:*:)(..),(:.:)(..))
+
 import           Control.Monad.Trans.State.Lazy
 import           Data.Finite
+import           Data.Foldable
 import           Data.Key
 import           Data.List                       hiding (zipWith)
 import           Data.Ord                               (comparing)
 import           Data.Singletons.TypeLits
-import qualified Data.Vector.Sized as VS
-import           Numeric.LinearAlgebra.Data             (toList)
+import qualified Data.Vector.Sized            as VS
+import qualified Numeric.LinearAlgebra.Data   as LAD
 import           Numeric.LinearAlgebra.Static
 import           System.Random
 import           Text.Printf
+
+import           ConCat.Deep
+import           ConCat.Orphans                         (fstF, sndF)
 
 import           Haskell_ML.Classify.Classifiable
 
@@ -85,7 +94,7 @@ calcMeanList = uncurry (/) . foldr (\e (s,c) -> (e+s,c+1)) (0,0)
 
 -- | Pretty printer for values of type `R` n.
 printVector :: (KnownNat n) => R n -> String
-printVector v = foldl' (\ s x -> s ++ printf "%+6.4f  " x) "[ " ((toList . extract) v) ++ " ]"
+printVector v = foldl' (\ s x -> s ++ printf "%+6.4f  " x) "[ " ((LAD.toList . extract) v) ++ " ]"
 
 
 -- | Pretty printer for values of type (`R` `m`, `R` `n`).
@@ -139,4 +148,37 @@ for = flip fmap
 -- | Find the index of the maximum value in a keyed functor.
 maxIndex :: (Foldable f, Keyed f, Ord a) => f a -> Key f
 maxIndex = fst . maximumBy (comparing snd) . keyed
+
+
+{--------------------------------------------------------------------
+    Network structure
+--------------------------------------------------------------------}
+
+-- | A class of parameter types that can be split into a sequence of
+-- layers of "weights" and "biases". The meaning of the two notions:
+-- "weight" and "bias", are type specific. The only unifyng feature
+-- of these, across types, is that they be fully resolved types.
+class HasLayers p where
+  getWeights :: p s -> [[s]]
+  getBiases  :: p s -> [[s]]
+
+instance (HasLayers f, HasLayers g) => HasLayers (g :*: f) where
+  getWeights (g :*: f) = [ (concat . getWeights) f, (concat . getWeights) g ]
+  getBiases  (g :*: f) = [ (concat . getBiases)  f, (concat . getBiases)  g ]
+
+instance (Foldable a, Foldable b) => HasLayers (a --+ b) where
+  getWeights (Comp1 gf) = (map (toList          . fstF) . toList) gf
+  getBiases  (Comp1 gf) = (map ((: []) . unPar1 . sndF) . toList) gf
+
+-- instance (HasLayers f, Foldable g) => HasLayers (g :.: f) where
+--   getWeights (Comp1 g) = reverse $ foldl' (\ws -> (: ws) . concat . getWeights) [] g
+--   getBiases  (Comp1 g) = reverse $ foldl' (\ws -> (: ws) . concat . getBiases)  [] g
+
+-- instance Foldable f => HasLayers (f :*: Par1) where
+--   getWeights (f :*: Par1 _) = [toList f]
+--   getBiases  (_ :*: Par1 x) = [[x]]
+
+-- instance Foldable f => HasLayers f where
+--   getWeights f = [toList f]
+--   getBiases  f = [[]]
 
