@@ -7,6 +7,7 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -40,15 +41,13 @@ main = do
   shuffled <- shuffleM samps
 
   -- Perform the following operations, in order:
+  -- - Make attribute values uniform over [0,1].
   -- - Split samples according to class.
-  -- - Within each class, make attribute values uniform over [0,1].
   -- - Split each class into training/testing sets.
   let splitV = VS.map ( splitTrnTst 80
                       . map (toR *** toR)
-                      . uncurry zip
-                      . first mkAttrsUniform
-                      . unzip
-                      ) $ splitClassifiableData shuffled
+                      ) $ (splitClassifiableData . uncurry zip . first mkAttrsUniform . unzip)
+                        $ map (first attrToVec) shuffled
 
   -- Gather up the training/testing sets into two lists and reshuffle.
   let (trn, tst) = fold splitV

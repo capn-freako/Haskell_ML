@@ -32,7 +32,7 @@ Portability : ?
 module Haskell_ML.Classify.Classifiable where
 
 import           GHC.TypeLits
-import           Control.Arrow               ((***), (&&&))
+import           Control.Arrow               ((&&&), second)
 import           Data.Attoparsec.Text hiding (take)
 import           Data.Foldable               (foldl')
 import qualified Data.Text         as T
@@ -72,9 +72,11 @@ readClassifiableData fname = do
 
 
 -- | Split a list of samples into classes and convert to vector form.
-splitClassifiableData :: (Classifiable t, KnownNat (NAtt t)) => [(Attr t, t)] -> V (Card t) [(V (NAtt t) Double, TypeVec t)]
+-- splitClassifiableData :: (Classifiable t, KnownNat (NAtt t)) => [(Attr t, t)] -> V (Card t) [(V (NAtt t) Double, TypeVec t)]
+splitClassifiableData :: (Classifiable t, KnownNat (NAtt t)) => [(AttrVec t, t)] -> V (Card t) [(AttrVec t, TypeVec t)]
 splitClassifiableData samps =
-  VS.map (\q -> map (attrToVec *** typeToVec) $ filter (q . snd) samps) filtPreds
+  -- VS.map (\q -> map (attrToVec *** typeToVec) $ filter (q . snd) samps) filtPreds
+  VS.map (\q -> map (second typeToVec) $ filter (q . snd) samps) filtPreds
 
 
 -- | Rescale all attribute values to fall in [0,1].
