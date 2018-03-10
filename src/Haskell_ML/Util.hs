@@ -11,7 +11,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -34,6 +33,7 @@ import GHC.Generics (Par1(..),(:*:)(..),(:.:)(..))
 import           Control.Monad.Trans.State.Lazy
 import           Data.Finite
 import           Data.Foldable
+import           Data.Function                       (on)
 import           Data.Key
 import           Data.List                    hiding (zipWith, zip)
 import           Data.Ord                            (comparing)
@@ -45,7 +45,7 @@ import           System.Random
 import           Text.Printf
 
 import           ConCat.Deep
-import           ConCat.Misc                         (sqr)
+import           ConCat.Misc                         (sqr, result, cond)
 import           ConCat.Orphans                      (fstF, sndF)
 
 import           Haskell_ML.Classify.Classifiable
@@ -73,13 +73,7 @@ classificationAccuracy :: (Foldable f, Keyed f, Eq (Key f), Foldable g, Zip g, O
                        -> g (f a)  -- ^ Functor of reference vectors.
                        -> Double
 classificationAccuracy us vs = calcMeanList $ cmpr us vs
-  where cmpr :: (Foldable f, Keyed f, Eq (Key f), Zip g, Ord a)
-             => g (f a) -> g (f a) -> g Double
-        cmpr xs ys = for (zipWith maxComp xs ys) $ \case
-                       True  -> 1.0
-                       False -> 0.0
-        maxComp :: (Foldable f, Keyed f, Eq (Key f), Ord a) => f a -> f a -> Bool
-        maxComp u v = maxIndex u == maxIndex v
+  where cmpr    = (result.result.fmap) (cond 1 0) (zipWith ((==) `on` maxIndex))
 
 
 -- | Calculate the mean value of a list.
