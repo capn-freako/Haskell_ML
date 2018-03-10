@@ -56,12 +56,7 @@ import           Haskell_ML.Classify.Classifiable
 -- The Finite given should be the percentage of samples desired for
 -- training.
 splitTrnTst :: Finite 101 -> [a] -> ([a],[a])
-splitTrnTst _ [] = ([],[])
-splitTrnTst n xs =
-  let n'   = length xs * (fromInteger . getFinite) n `div` 100
-      trn  = take n' xs
-      tst  = drop n' xs
-   in (trn, tst)
+splitTrnTst n xs = splitAt (length xs * (fromInteger . getFinite) n `div` 100) xs
 
 
 -- | Convert vector of Doubles from sized vector to hmatrix format.
