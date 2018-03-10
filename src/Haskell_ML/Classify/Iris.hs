@@ -31,6 +31,7 @@ import           Control.Applicative
 import           Data.Attoparsec.Text hiding (take)
 import qualified Data.Vector.Sized as VS
 import           Data.Maybe                  (fromMaybe)
+import           Data.Monoid                 ((<>))
 
 import Haskell_ML.Classify.Classifiable
 
@@ -54,24 +55,23 @@ instance Classifiable Iris where
     } deriving (Show, Read, Eq, Ord)
   attrToVec IrisAttr{..} = fromMaybe (error "Iris.attrToVec bombed!") $
                            VS.fromList [sepLen, sepWidth, pedLen, pedWidth]
-  typeToVec = \case
-    Setosa     -> fromMaybe (error "Iris.typeToVec bombed!") $ VS.fromList [1,0,0]
-    Versicolor -> fromMaybe (error "Iris.typeToVec bombed!") $ VS.fromList [0,1,0]
-    Virginica  -> fromMaybe (error "Iris.typeToVec bombed!") $ VS.fromList [0,0,1]
+  typeToVec = fromMaybe (error "Iris.typeToVec bombed!") . VS.fromList .
+            \case Setosa     -> [1,0,0]
+                  Versicolor -> [0,1,0]
+                  Virginica  -> [0,0,1]
   filtPreds = fromMaybe (error "Iris.filtPreds bombed!") $
               VS.fromList [ (== Setosa)
                           , (== Versicolor)
                           , (== Virginica)
                           ]
-  sampleParser = f <$> (double <* char ',')
-                   <*> (double <* char ',')
-                   <*> (double <* char ',')
-                   <*> (double <* char ',')
-                   <*> irisParser
-    where
-      f sl sw pl pw i = (IrisAttr sl sw pl pw, i)
-      irisParser :: Parser Iris
-      irisParser =     string "Iris-setosa"     *> return Setosa
-                   <|> string "Iris-versicolor" *> return Versicolor
-                   <|> string "Iris-virginica"  *> return Virginica
+  sampleParser = f <$> dc <*> dc <*> dc <*> dc <*> irisParser
+   where
+     dc = double <* char ','
+     f sl sw pl pw i = (IrisAttr sl sw pl pw, i)
+     irisParser :: Parser Iris
+     irisParser =  named "setosa"     Setosa
+               <|> named "versicolor" Versicolor
+               <|> named "virginica"  Virginica
+      where
+        named str x = string ("Iris-" <> str) *> return x
 
