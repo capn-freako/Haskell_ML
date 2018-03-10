@@ -14,10 +14,8 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 {-|
@@ -34,7 +32,7 @@ module Haskell_ML.Classify.Classifiable where
 import           GHC.TypeLits
 import           Control.Arrow               ((&&&), second)
 import           Data.Attoparsec.Text hiding (take)
-import           Data.Foldable               (foldl')
+import           Data.Foldable               (minimum, maximum)
 import qualified Data.Text         as T
 import qualified Data.Vector.Sized as VS
 
@@ -72,10 +70,8 @@ readClassifiableData fname = do
 
 
 -- | Split a list of samples into classes and convert to vector form.
--- splitClassifiableData :: (Classifiable t, KnownNat (NAtt t)) => [(Attr t, t)] -> V (Card t) [(V (NAtt t) Double, TypeVec t)]
 splitClassifiableData :: (Classifiable t, KnownNat (NAtt t)) => [(AttrVec t, t)] -> V (Card t) [(AttrVec t, TypeVec t)]
 splitClassifiableData samps =
-  -- VS.map (\q -> map (attrToVec *** typeToVec) $ filter (q . snd) samps) filtPreds
   VS.map (\q -> map (second typeToVec) $ filter (q . snd) samps) filtPreds
 
 
@@ -83,11 +79,12 @@ splitClassifiableData samps =
 mkAttrsUniform :: KnownNat n => [V n Double] -> [V n Double]
 mkAttrsUniform [] = []
 mkAttrsUniform vs = map (VS.zipWith (*) scales . flip (VS.zipWith (-)) mins) vs
-  where (mins, maxs) = getAttrRanges vs
-        scales       = VS.zipWith (\ mn mx -> if mx == mn then 0 else 1 / (mx - mn)) mins maxs
+  where minMaxV = getAttrRanges vs
+        scales  = VS.map (\ (mn, mx) -> if mx == mn then 0 else 1 / (mx - mn)) minMaxV
+        mins    = VS.map fst minMaxV
 
 -- | Find the extremes in a list of attribute vectors.
-getAttrRanges :: KnownNat n => [V n Double] -> (V n Double, V n Double)
-getAttrRanges = f min 1e10 &&& f max (-1e10)
-  where f g x = foldl' (VS.zipWith g) (VS.replicate x)
+getAttrRanges :: (Traversable g, Applicative f, Ord a)
+              => g (f a) -> f (a,a)
+getAttrRanges = fmap (minimum &&& maximum) . sequenceA
 
