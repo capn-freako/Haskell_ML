@@ -2,7 +2,19 @@ flags: {}
 extra-package-dbs: []
 packages:
 - .
-- location: ../concat
+# - location: ../concat
+#   subdirs:
+#   - classes
+#   - plugin
+#   - examples
+#   - inline
+#   - satisfy
+#   extra-dep: true
+# This alternative makes show&tell easier, but may not be ideal.
+# Let's discuss.
+- location:
+    git: https://github.com/conal/concat.git
+    commit: 71acbf18a6ca6afd242bb418bf288bc604e30e07
   subdirs:
   - classes
   - plugin
