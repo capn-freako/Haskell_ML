@@ -13,7 +13,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
@@ -28,7 +27,7 @@ Portability : ?
 -}
 module Haskell_ML.Util where
 
-import Prelude hiding (zipWith)
+import Prelude hiding (zipWith, zip)
 
 import GHC.Generics (Par1(..),(:*:)(..),(:.:)(..))
 
@@ -36,8 +35,8 @@ import           Control.Monad.Trans.State.Lazy
 import           Data.Finite
 import           Data.Foldable
 import           Data.Key
-import           Data.List                       hiding (zipWith)
-import           Data.Ord                               (comparing)
+import           Data.List                    hiding (zipWith, zip)
+import           Data.Ord                            (comparing)
 import           Data.Singletons.TypeLits
 import qualified Data.Vector.Sized            as VS
 import qualified Numeric.LinearAlgebra.Data   as LAD
@@ -46,7 +45,8 @@ import           System.Random
 import           Text.Printf
 
 import           ConCat.Deep
-import           ConCat.Orphans                         (fstF, sndF)
+import           ConCat.Misc                         (sqr)
+import           ConCat.Orphans                      (fstF, sndF)
 
 import           Haskell_ML.Classify.Classifiable
 
@@ -92,6 +92,12 @@ calcMeanList :: (Foldable f, Fractional a) => f a -> a
 calcMeanList = uncurry (/) . foldr (\e (s,c) -> (e+s,c+1)) (0,0)
 
 
+-- | Prompt the user for input and read it.
+prompt :: Read a => String -> IO a
+prompt s = do
+  putStrLn s
+  readLn
+
 -- | Pretty printer for values of type `R` n.
 printVector :: (KnownNat n) => R n -> String
 printVector v = foldl' (\ s x -> s ++ printf "%+6.4f  " x) "[ " ((LAD.toList . extract) v) ++ " ]"
@@ -102,8 +108,24 @@ printVecPair :: (KnownNat m, KnownNat n) => (R m, R n) -> String
 printVecPair (u, v) = "( " ++ printVector u ++ ", " ++ printVector v ++ " )"
 
 
--- | Plot a list of Doubles to an ASCII terminal.
-asciiPlot :: [Double] -> String
+-- | Show the learning evolution for the various parts/layers in a
+-- list of HasLayers.
+showPart :: (HasLayers p, RealFrac s, Ord s, PrintfArg s)
+         => (p s -> [[s]])  -- ^ The "getter", which grabs the correct part of the parameters.
+         -> String          -- ^ A label, which identifies the target of the getter.
+         -> [p s]           -- ^ List of parameters, one per epoch.
+         -> [String]
+showPart f s ps =
+  let xss = zip [1::Int,2..] $ (transpose . map f) ps
+   in concatMap ( \ (i, xs) ->
+                  [ "Average variance in layer " ++ show i ++ " " ++ s ++ ":"
+                  , asciiPlot $ map (calcMeanList . map sqr) xs
+                  ]
+                ) xss
+
+
+-- | Plot a list of Fractionals to an ASCII terminal.
+asciiPlot :: (RealFrac a, Ord a, PrintfArg a) => [a] -> String
 asciiPlot ys = unlines $
   zipWith (++)
     [ "        "
@@ -125,7 +147,7 @@ asciiPlot ys = unlines $
     for xs $ \x ->
       valToStr $ (x - x_min) * 10 / x_range
     ) ++ ["|0" ++ concat [replicate 16 '_' ++ printf "%4d" (n * length ys `div` 3) | n <- [1..3]] ++ ">"]
-      where valToStr  :: Double -> String
+      where valToStr  :: (RealFrac a, Ord a) => a -> String
             valToStr x = let i = round (10 - x)
                           in replicate i ' ' ++ "*" ++ replicate (10 - i) ' '
             x_min      = minimum xs
@@ -173,8 +195,8 @@ instance (HasLayers f, HasLayers g) => HasLayers (g :*: f) where
   getBiases  (g :*: f) = getBiases  f ++ getBiases  g
 
 instance (Foldable a, Foldable b) => HasLayers (a --+ b) where
-  getWeights (Comp1 gf) = [(concat . map (toList          . fstF) . toList) gf]
-  getBiases  (Comp1 gf) = [(concat . map ((: []) . unPar1 . sndF) . toList) gf]
+  getWeights (Comp1 gf) = [(concatMap (toList          . fstF) . toList) gf]
+  getBiases  (Comp1 gf) = [(concatMap ((: []) . unPar1 . sndF) . toList) gf]
 
 -- instance (HasLayers f, Foldable g) => HasLayers (g :.: f) where
 --   getWeights (Comp1 g) = reverse $ foldl' (\ws -> (: ws) . concat . getWeights) [] g
