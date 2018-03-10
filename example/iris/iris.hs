@@ -85,8 +85,8 @@ main = do
       biases  = zip [1::Int,2..] $ (transpose . map snd) diffs
   forM_ weights $ \ (i, ws) -> do
     putStrLn $ "Average variance in layer " ++ show i ++ " weights:"
-    putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x)) ws
+    putStrLn $ asciiPlot $ map (mean . map (\x -> x*x)) ws
   forM_ biases $ \ (i, bs) -> do
     putStrLn $ "Average variance in layer " ++ show i ++ " biases:"
-    putStrLn $ asciiPlot $ map (calcMeanList . map (\x -> x*x)) bs
+    putStrLn $ asciiPlot $ map (mean . map (\x -> x*x)) bs
 

@@ -47,7 +47,7 @@ import Data.Singletons.Prelude
 import Data.Singletons.TypeLits
 import Data.Vector.Storable (toList, maxIndex)
 import GHC.Generics (Generic)
-import Numeric.LinearAlgebra.Static
+import Numeric.LinearAlgebra.Static hiding (mean)
 
 import Haskell_ML.Util  hiding (classificationAccuracy, maxIndex, getWeights, getBiases)
 
@@ -109,7 +109,7 @@ trainNTimes' accs diffs n rate net prs = trainNTimes' (accs ++ [acc]) (diffs ++ 
 --   - a list of results vectors, and
 --   - a list of reference vectors.
 classificationAccuracy :: (KnownNat n) => [R n] -> [R n] -> Double
-classificationAccuracy us vs = calcMeanList $ cmpr us vs
+classificationAccuracy us vs = mean $ cmpr us vs
   where cmpr :: (KnownNat n) => [R n] -> [R n] -> [Double]
         cmpr xs ys = for (zipWith maxComp xs ys) $ \case
                        True  -> 1.0

@@ -40,7 +40,7 @@ import           Data.Ord                            (comparing)
 import           Data.Singletons.TypeLits
 import qualified Data.Vector.Sized            as VS
 import qualified Numeric.LinearAlgebra.Data   as LAD
-import           Numeric.LinearAlgebra.Static
+import           Numeric.LinearAlgebra.Static hiding (mean)
 import           System.Random
 import           Text.Printf
 
@@ -72,13 +72,13 @@ classificationAccuracy :: (Foldable f, Keyed f, Eq (Key f), Foldable g, Zip g, O
                        => g (f a)  -- ^ Functor of result vectors.
                        -> g (f a)  -- ^ Functor of reference vectors.
                        -> Double
-classificationAccuracy us vs = calcMeanList $ cmpr us vs
-  where cmpr    = (result.result.fmap) (cond 1 0) (zipWith ((==) `on` maxIndex))
+classificationAccuracy = (result.result) boolScore (zipWith ((==) `on` maxIndex))
+ where boolScore = mean . fmap (cond 1 0)
 
 
--- | Calculate the mean value of a list.
-calcMeanList :: (Foldable f, Fractional a) => f a -> a
-calcMeanList = uncurry (/) . foldr (\e (s,c) -> (e+s,c+1)) (0,0)
+-- | Mean value of a collection
+mean :: (Foldable f, Fractional a) => f a -> a
+mean = uncurry (/) . foldr (\e (s,c) -> (e+s,c+1)) (0,0)
 
 
 -- | Prompt the user for input and read it.
@@ -108,7 +108,7 @@ showPart f s ps =
   let xss = zip [1::Int,2..] $ (transpose . map f) ps
    in concatMap ( \ (i, xs) ->
                   [ "Average variance in layer " ++ show i ++ " " ++ s ++ ":"
-                  , asciiPlot $ map (calcMeanList . map sqr) xs
+                  , asciiPlot $ map (mean . map sqr) xs
                   ]
                 ) xss
 
