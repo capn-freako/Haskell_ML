@@ -1,3 +1,0 @@
-[submodule "hmatrix"]
-	path = hmatrix
-	url = git@github.com:capn-freako/hmatrix.git
