@@ -35,7 +35,7 @@ Portability : ?
 -}
 module Haskell_ML.FCN
   ( FCNet(), TrainEvo(..)
-  , randNet, runNet, netTest, hiddenStruct
+  , randNet, runNet, runNet', netTest, hiddenStruct
   , getWeights, getBiases
   , trainNTimes, classificationAccuracy
   ) where
@@ -47,10 +47,10 @@ import Data.Singletons.Prelude
 import Data.Singletons.TypeLits
 import Data.Vector.Storable (toList, maxIndex)
 import GHC.Generics (Generic)
-import Numeric.LinearAlgebra.Static hiding (mean)
+import Numeric.LinearAlgebra.Static hiding (mean)  -- ^ @R@ & @L@ come from here.
+-- import Internal.Static (lift1F)  -- Doesn't work; module is hidden.
 
 import Haskell_ML.Util  hiding (classificationAccuracy, maxIndex, getWeights, getBiases)
-
 
 -- | A fully connected, multi-layer network with fixed input/output
 -- widths, but variable (and existentially hidden!) internal structure.
@@ -125,6 +125,15 @@ runNet :: (KnownNat i, KnownNat o)
        -> [R i]      -- ^ the list of inputs
        -> [R o]      -- ^ the list of outputs
 runNet (FCNet n) = map (runNetwork n)
+
+
+-- | Run a network on a list of inputs,
+-- enforcing 4-bit precision for activation outputs.
+runNet' :: (KnownNat i, KnownNat o)
+       => FCNet i o  -- ^ the network to run
+       -> [R i]      -- ^ the list of inputs
+       -> [R o]      -- ^ the list of outputs
+runNet' (FCNet n) = map (runNetwork' n)
 
 
 -- | `Binary` instance definition for `FCNet`.
@@ -321,6 +330,33 @@ runNetwork = \case
   (w :&~ n') -> \(!v) -> let v' = logistic (runLayer w v)
                          in runNetwork n' v'
 
+-- 4-bit quantization experiment
+runNetwork' :: (KnownNat i, KnownNat o)
+            => Network i hs o
+            -> R i
+            -> R o
+runNetwork' = \case
+  W w -> \(!v) ->
+    let vq = quantize v
+     in quantize $ logistic (runLayer w vq)
+  (w :&~ n') -> \(!v) ->
+    let v' = quantize $ logistic (runLayer w vq)
+        vq = quantize v
+     in runNetwork' n' v'
+
+quantize :: KnownNat n => R n -> R n
+quantize v = dvmap (fromIntegral . floor) (abs v' * 15 + 0.5) / 15
+  where v' = dvmap (max 0 . min 1) v
+
+-- | Apply a function to each element of an `R n`.
+-- lift1F
+--   :: (c t -> c t)
+--   -> Dim n (c t) -> Dim n (c t)
+-- lift1F f (Dim v) = Dim (f v)
+
+-- floor' :: Floating a => a -> a
+-- floor' x | x < 0 = -floor' (-x)
+          
 -- Trains a value of type `FCNet i o`, using the supplied list of
 -- training pairs (i.e. - matched input/output vectors).
 trainNet :: (KnownNat i, KnownNat o)

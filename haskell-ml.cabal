@@ -105,6 +105,21 @@ executable iris-concat
                        -fplugin=ConCat.Plugin
                        -- -fplugin-opt=ConCat.Plugin:trace
 
+executable iris-4bit
+  hs-source-dirs:      example/iris
+  main-is:             iris-4bit.hs
+  build-depends:       base >= 4.7 && < 5
+                     , haskell-ml
+                     , hmatrix
+                     , random-shuffle
+                     , vector-sized
+  default-language:    Haskell2010
+  ghc-options:         -O2
+                       -fexcess-precision
+                       -optc-ffast-math
+                       -optc-O3
+                       -- -rtsopts
+
 -- executable iris-concat-simple
 --   hs-source-dirs:      example/iris
 --   main-is:             iris-concat-simple.hs
