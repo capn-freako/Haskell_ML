@@ -336,27 +336,26 @@ runNetwork' :: (KnownNat i, KnownNat o)
             -> R i
             -> R o
 runNetwork' = \case
-  W w -> \(!v) ->
-    let vq = quantize v
-     in quantize $ logistic (runLayer w vq)
-  (w :&~ n') -> \(!v) ->
-    let v' = quantize $ logistic (runLayer w vq)
-        vq = quantize v
+  -- W w -> \(!v) ->
+  W Layer{..} -> \(!v) ->
+    let vq = quantizeV v
+        wq = Layer (quantizeV biases) (quantizeM nodes)
+     in quantizeV $ logistic (runLayer wq vq)
+  -- (w :&~ n') -> \(!v) ->
+  (Layer{..} :&~ n') -> \(!v) ->
+    let v' = quantizeV $ logistic (runLayer wq vq)
+        vq = quantizeV v
+        wq = Layer (quantizeV biases) (quantizeM nodes)
      in runNetwork' n' v'
 
-quantize :: KnownNat n => R n -> R n
-quantize v = dvmap (fromIntegral . floor) (abs v' * 15 + 0.5) / 15
+quantizeV :: KnownNat n => R n -> R n
+quantizeV v = dvmap (fromIntegral . floor) (abs v' * 15 + 0.5) / 15
   where v' = dvmap (max 0 . min 1) v
 
--- | Apply a function to each element of an `R n`.
--- lift1F
---   :: (c t -> c t)
---   -> Dim n (c t) -> Dim n (c t)
--- lift1F f (Dim v) = Dim (f v)
+quantizeM :: (KnownNat i, KnownNat o) => L o i -> L o i
+quantizeM m = dmmap (fromIntegral . floor) (abs m' * 15 + 0.5) / 15
+  where m' = dmmap (max 0 . min 1) m
 
--- floor' :: Floating a => a -> a
--- floor' x | x < 0 = -floor' (-x)
-          
 -- Trains a value of type `FCNet i o`, using the supplied list of
 -- training pairs (i.e. - matched input/output vectors).
 trainNet :: (KnownNat i, KnownNat o)
